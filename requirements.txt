@@ -1,0 +1,16 @@
+# Core scientific stack
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+scikit-learn>=1.4
+
+# Generative models (CTGAN officiel, méthode 2)
+sdv>=1.10
+
+# Deep learning backend (CTGAN + MLP de la section 8)
+torch>=2.1
+
+# Visualisation (section 7)
+matplotlib>=3.8
+seaborn>=0.13
+
