@@ -277,13 +277,14 @@ class SyntheticDataPipeline:
         fig.savefig(path, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-    def _step_run_ml_evaluation(self) -> None:
+    def _step_run_ml_evaluation(self, progress=None) -> None:
         with self._timed("6. Évaluation ML"):
             self.logger.info("  Entraînement et évaluation des 3 modèles…")
             ml_report = build_ml_evaluation_report(
                 self.df_copula,
                 df_other=self.df_ctgan,
                 seed=self.config.seed,
+                progress=progress,
             )
 
             self.logger.info("  Résultats (split unique sur copule) :")
