@@ -14,3 +14,7 @@ torch>=2.1
 matplotlib>=3.8
 seaborn>=0.13
 
+# Interface graphique de démonstration (demo_app.py)
+customtkinter>=5.2
+pillow>=10.0
+

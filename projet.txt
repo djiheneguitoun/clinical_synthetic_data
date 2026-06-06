@@ -1,0 +1,160 @@
+Génération de données cliniques synthétiques de patients en utilisant l’IA générative
+Objectif du projet
+ L’objectif de ce projet est de concevoir et d’implémenter un système capable de générer des données cliniques synthétiques de patients représentant à la fois des individus en bonne santé et des patients avec des conditions médicales courantes.
+ Le jeu de données généré doit :
+Représenter des profils cliniques réalistes de patients
+Contenir de multiples conditions de santé
+Être statistiquement cohérent avec de vraies données cliniques
+Être équilibré entre différents groupes de patients
+Le jeu de données final doit être utilisable pour la recherche médicale, l’entraînement de l’IA et des objectifs éducatifs, tout en évitant les problèmes de confidentialité associés aux données réelles des patients.
+Tâches du projet
+Définition des classes de patients
+Les étudiants doivent définir plusieurs catégories de patients.
+Les classes possibles incluent :
+Individus en bonne santé
+Patients diabétiques
+Cholestérol élevé (hypercholestérolémie)
+Hypertension
+Obésité
+Patients à risque cardiovasculaire
+Soit :
+ N = nombre de classes de patients
+ M = nombre de patients par classe
+ Nombre total d’enregistrements générés :
+ Total patients = N × M
+ Exemple :
+ 6 classes avec 1000 patients par classe → 6000 dossiers patients.
+ Le jeu de données doit être équilibré.
+Définition des variables cliniques
+Les étudiants doivent définir un ensemble de variables cliniques décrivant chaque patient.
+Des exemples de variables incluent :
+Données démographiques :
+Âge
+Sexe
+Taille
+Poids
+Indice de masse corporelle (IMC)
+Signes vitaux :
+Fréquence cardiaque
+Pression artérielle (systolique et diastolique)
+Fréquence respiratoire
+Température corporelle
+Résultats de laboratoire :
+Taux de glucose sanguin
+HbA1c
+Cholestérol total
+Cholestérol LDL
+Cholestérol HDL
+Triglycérides
+Variables de mode de vie :
+Niveau d’activité physique
+Statut tabagique
+Consommation d’alcool
+Qualité de l’alimentation
+
+ Modélisation des connaissances médicales
+ Les étudiants doivent définir des plages cliniques réalistes pour chaque paramètre.
+Glucose sanguin sain : 70 – 100 mg/dL
+ Diabète : ≥ 126 mg/dL
+ Cholestérol sain : < 200 mg/dL
+ Cholestérol élevé :  ≥ 240 mg/dL
+ Catégories de pression artérielle :
+ Normal : <120 / <80 mmHg
+ Hypertension : ≥140 / ≥90 mmHg
+ Les étudiants doivent justifier ces plages en utilisant des références médicales.
+Génération de données synthétiques
+ Les étudiants doivent concevoir un système capable de générer des profils patients synthétiques.
+ Approches possibles :
+génération statistique basée sur des règles
+modèles probabilistes
+modèles d’IA générative (LLM ou modèles tabulaires génératifs)
+Chaque patient généré doit contenir un ensemble complet de variables cliniques.
+ Exemple d’enregistrement :
+ID patient
+Âge
+Sexe
+IMC
+Pression artérielle
+Glucose
+Cholestérol
+Diagnostic
+Équilibrage du jeu de données
+Le jeu de données final doit contenir le même nombre de patients pour chaque classe.
+ Exemple de structure :
+Sains : M patients
+Diabète : M patients
+Cholestérol élevé : M patients
+Hypertension : M patients
+Obésité : M patients
+Risque cardiovasculaire : M patients
+
+Validation de la plausibilité clinique
+Les étudiants doivent implémenter des contrôles de validation pour s’assurer que les enregistrements générés sont médicalement plausibles.
+ Exemples :
+L’IMC doit correspondre à la taille et au poids
+Les valeurs de glucose doivent être cohérentes avec le statut diabétique
+Les valeurs de cholestérol doivent correspondre au statut d’hypercholestérolémie
+Les enregistrements invalides doivent être rejetés.
+
+Validation statistique
+Les étudiants doivent analyser le jeu de données généré en utilisant des méthodes statistiques.
+ Analyses suggérées incluent :
+distribution des variables cliniques
+analyse de corrélation entre variables
+comparaison avec des statistiques épidémiologiques connues
+
+Visualisation
+ Les étudiants doivent visualiser le jeu de données en utilisant des graphiques tels que :
+histogrammes des paramètres cliniques
+nuages de points (IMC vs glucose, cholestérol vs âge)
+matrices de corrélation
+
+Évaluation par apprentissage automatique (Machine Learning)
+ Les étudiants doivent entraîner un modèle d’apprentissage automatique pour prédire les conditions de santé en utilisant le jeu de données synthétique.
+ Les modèles possibles incluent :
+Régression logistique
+Forêt aléatoire (Random Forest)
+Réseaux de neurones
+ L’objectif est de vérifier si le jeu de données généré est utile pour entraîner des modèles prédictifs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Organisation du jeu de données
+ Le jeu de données final doit être stocké au format tabulaire.
+ Exemple de structure :
+ Synthetic_Clinical_Dataset/
+ patients.csv
+ Chaque ligne représente un patient et chaque colonne correspond à une variable clinique.
+Livrables attendus
+ Les étudiants doivent soumettre :
+Code Python implémentant le pipeline de génération de données
+Le jeu de données clinique synthétique généré
+Analyse statistique du jeu de données
+Figures de visualisation
+Un article scientifique final (5–10 pages) décrivant la méthodologie et les résultats
+Critères d’évaluation
+ Les projets seront évalués sur la base de :
+réalisme des données cliniques générées
+exactitude de la modélisation médicale
+validation statistique du jeu de données
+qualité du code et reproductibilité
+qualité scientifique de l’article
+Travail avancé optionnel
+ Les étudiants peuvent explorer des modèles génératifs plus avancés tels que :
+modèles GAN pour données tabulaires
+modèles de diffusion pour données tabulaires (RECOM.)
+modèles génératifs conditionnels contrôlant les conditions des patients
+ L’objectif est de générer des profils patients cliniques réalistes et diversifiés adaptés aux applications d’IA médicale.
+SOUMISSION : DIAPOS + Rapport technique + Article scientifique
+
+
