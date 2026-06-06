@@ -766,13 +766,22 @@ class DemoApp(ctk.CTk):
         path = self._ds_map.get(label)
         if not path:
             return
+
+        loading = ctk.CTkLabel(self._ds_table_holder, text="⏳  Chargement…",
+                               font=(FONT_FAMILY, 13), text_color=COL_TXT_DIM)
+        loading.grid(row=0, column=0, pady=20)
+        self.update_idletasks()
+
         try:
             import pandas as pd
             df = pd.read_csv(path)
         except Exception as e:
+            loading.destroy()
             ctk.CTkLabel(self._ds_table_holder, text=f"Erreur : {e}",
                          text_color=COL_ERR).grid(row=0, column=0, pady=20)
             return
+
+        loading.destroy()
         self._table(self._ds_table_holder, df, max_rows=None, padded=True)
 
     def _render_analysis(self):
@@ -1048,24 +1057,11 @@ class DemoApp(ctk.CTk):
             holder.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         else:
             holder.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        holder.grid_rowconfigure(0, weight=1)
+        holder.grid_rowconfigure(1, weight=1)
         holder.grid_columnconfigure(0, weight=1)
-        tree = ttk.Treeview(holder, style="Clinic.Treeview", show="headings",
-                            height=18)
-        tree.grid(row=0, column=0, sticky="nsew")
-        vsb = ttk.Scrollbar(holder, orient="vertical", command=tree.yview)
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb = ttk.Scrollbar(holder, orient="horizontal", command=tree.xview)
-        hsb.grid(row=1, column=0, sticky="ew")
-        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
-        head_font = tkfont.Font(family=FONT_FAMILY, size=10, weight="bold")
-        cell_font = tkfont.Font(family=FONT_FAMILY, size=10)
 
         cols = list(df.columns)
-        tree["columns"] = cols
 
-        # Échantillonne tout le dataset pour représenter toutes les classes.
         n = len(df)
         if max_rows is None or n <= max_rows:
             sample = df
@@ -1074,14 +1070,29 @@ class DemoApp(ctk.CTk):
             idx = sorted({min(int(i * step), n - 1) for i in range(max_rows)})
             sample = df.iloc[idx]
 
+        tree = ttk.Treeview(holder, style="Clinic.Treeview", show="headings",
+                            height=18)
+        tree.grid(row=1, column=0, sticky="nsew")
+        vsb = ttk.Scrollbar(holder, orient="vertical", command=tree.yview)
+        vsb.grid(row=1, column=1, sticky="ns")
+        hsb = ttk.Scrollbar(holder, orient="horizontal", command=tree.xview)
+        hsb.grid(row=2, column=0, sticky="ew")
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        head_font = tkfont.Font(family=FONT_FAMILY, size=10, weight="bold")
+        cell_font = tkfont.Font(family=FONT_FAMILY, size=10)
+
+        tree["columns"] = cols
+
         display_rows = [
             [round(v, 2) if isinstance(v, float) else v for v in rrow]
-            for _, rrow in sample.iterrows()
+            for rrow in sample.itertuples(index=False, name=None)
         ]
 
+        width_probe = display_rows[:60]
         for ci, c in enumerate(cols):
             w = head_font.measure(str(c)) + 30
-            for dr in display_rows:
+            for dr in width_probe:
                 w = max(w, cell_font.measure(str(dr[ci])) + 24)
             w = max(70, min(w, 320))
             tree.heading(c, text=c)
