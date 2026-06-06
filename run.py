@@ -1,21 +1,4 @@
-"""
-Point d'entrée du pipeline complet.
-
-Usage
------
-    python run.py                          # production : M=1000, pipeline complet
-    python run.py --m 100 --skip-ctgan     # itération rapide
-    python run.py --m 500 --output results # configuration custom
-
-Étapes individuelles (sans le pipeline complet)
------------------------------------------------
-    python -m clinical_synthetic_data.generators.gaussian_copula --m 1000 -o copule.csv
-    python -m clinical_synthetic_data.generators.ctgan_generator --training copule.csv --m 1000 -o ctgan.csv
-    python -m clinical_synthetic_data.validation --input copule.csv
-    python -m clinical_synthetic_data.analysis --input copule.csv --compare ctgan.csv -o reports/
-    python -m clinical_synthetic_data.visualization --input copule.csv --label copule -o figures/
-    python -m clinical_synthetic_data.ml_evaluation --input copule.csv --compare ctgan.csv -o ml.json
-"""
+"""Point d'entrée du pipeline complet."""
 
 from __future__ import annotations
 

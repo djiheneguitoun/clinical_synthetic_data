@@ -1,7 +1,4 @@
-"""
-Interface abstraite des générateurs de données cliniques synthétiques.
-
-"""
+"""Interface abstraite des générateurs de données cliniques synthétiques."""
 
 from __future__ import annotations
 
@@ -42,12 +39,7 @@ class BaseGenerator(ABC):
         m_per_class: int,
         log_progress: bool = True,
     ) -> "pd.DataFrame":
-        """
-        Produit un jeu équilibré : `m_per_class` patients par classe.
-
-        Si `log_progress=True`, affiche pour chaque classe :
-            [i/6] classe : ✓ N patients (rejet X%, durée s)
-        """
+        """Produit un jeu équilibré : `m_per_class` patients par classe."""
         import pandas as pd
 
         all_patients: list[Patient] = []

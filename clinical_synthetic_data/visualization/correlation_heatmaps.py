@@ -1,11 +1,4 @@
-"""
-Heatmaps de matrices de corrélation (rapport section 7).
-
-Trois visualisations principales :
-    1. Heatmap d'une matrice de corrélation Pearson (un seul dataset).
-    2. Comparaison côte-à-côte de deux matrices (Méthode 1 vs Méthode 2).
-    3. Heatmap de la différence terme à terme (où CTGAN diverge de la copule).
-"""
+"""Heatmaps de matrices de corrélation."""
 
 from __future__ import annotations
 
@@ -26,9 +19,7 @@ def plot_correlation_heatmap(
     vmax: float = 1.0,
     annot: bool = True,
 ) -> plt.Figure:
-    """
-    Heatmap d'une matrice de corrélation, échelle bipolaire centrée sur 0.
-    """
+    """Heatmap d'une matrice de corrélation, échelle bipolaire centrée sur 0."""
     fig, ax = plt.subplots(figsize=(11, 9))
     sns.heatmap(
         correlation_matrix,
@@ -55,12 +46,7 @@ def plot_correlation_comparison(
     label_b: str = "CTGAN",
     output_path: Optional[str] = None,
 ) -> plt.Figure:
-    """
-    Comparaison côte-à-côte de deux matrices, plus la différence (A − B).
-
-    Le panneau de droite (différence) utilise une échelle plus serrée pour
-    rendre les divergences visibles.
-    """
+    """Comparaison côte-à-côte de deux matrices, plus la différence (A − B)."""
     common = matrix_a.columns.intersection(matrix_b.columns)
     m_a = matrix_a.loc[common, common]
     m_b = matrix_b.loc[common, common]

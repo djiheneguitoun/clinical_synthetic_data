@@ -1,10 +1,4 @@
-"""
-Nuages de points colorés par classe (rapport section 7).
-
-Met en évidence les patterns cliniques les plus discriminants entre classes :
-glucose vs HbA1c (diabète), LDL vs HDL (dyslipidémie), PAS vs PAD
-(hypertension), IMC vs glucose (axe cardio-métabolique).
-"""
+"""Nuages de points colorés par classe."""
 
 from __future__ import annotations
 
@@ -17,8 +11,6 @@ import pandas as pd
 from .distributions import CLASS_COLORS
 
 
-# Paires de variables cliniquement intéressantes (titre lisible affiché en
-# haut du subplot).
 KEY_SCATTER_PAIRS: tuple[tuple[str, str, str], ...] = (
     ("fasting_glucose", "hba1c", "Glycémie vs HbA1c (diabète)"),
     ("ldl", "hdl", "LDL vs HDL (dyslipidémie)"),
@@ -37,12 +29,7 @@ def plot_scatter_pairs(
     alpha: float = 0.45,
     point_size: int = 12,
 ) -> plt.Figure:
-    """
-    Grille de nuages de points colorés par classe.
-
-    Le sampling des points est sous-échantillonné par classe à 250 patients
-    max pour ne pas surcharger les figures sur de gros datasets.
-    """
+    """Grille de nuages de points colorés par classe."""
     n_pairs = len(pairs)
     n_cols = 3
     n_rows = (n_pairs + n_cols - 1) // n_cols
@@ -50,7 +37,6 @@ def plot_scatter_pairs(
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 4.5 * n_rows))
     axes = np.array(axes).flatten()
 
-    # Sous-échantillonnage par classe pour la lisibilité
     samples = []
     rng = np.random.default_rng(seed=0)
     for cls in CLASS_COLORS:
@@ -81,7 +67,6 @@ def plot_scatter_pairs(
     for ax in axes[n_pairs:]:
         ax.set_visible(False)
 
-    # Légende globale
     handles = [
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c,
                    markersize=8, alpha=0.6, label=cls)

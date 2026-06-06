@@ -5,8 +5,6 @@ import logging
 import warnings
 
 
-# Loggers tiers qui inondent stdout d'informations non actionnables.
-# Mis au niveau WARNING : on garde les erreurs vraies, on cache le bruit.
 NOISY_THIRD_PARTY_LOGGERS: tuple[str, ...] = (
     "rdt",
     "rdt.transformers",
@@ -26,23 +24,12 @@ def setup_logging(
     level: int = logging.INFO,
     quiet_third_party: bool = True,
 ) -> None:
-    """
-    Configure le logging racine avec un format propre et silencie les
-    bibliothèques tierces verbeuses.
-
-    Paramètres
-    ----------
-    level : int
-        Niveau du logger racine (défaut : INFO).
-    quiet_third_party : bool
-        Si True, met les loggers SDV/rdt à WARNING et ignore les
-        FutureWarning / UserWarning courants.
-    """
+    """Configure le logging racine et silencie les bibliothèques tierces verbeuses."""
     logging.basicConfig(
         level=level,
         format="%(asctime)s | %(message)s",
         datefmt="%H:%M:%S",
-        force=True,           # remplace toute config déjà installée
+        force=True,
     )
 
     if quiet_third_party:

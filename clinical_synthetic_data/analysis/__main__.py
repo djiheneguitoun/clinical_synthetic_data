@@ -1,13 +1,4 @@
-"""
-CLI : analyse statistique d'un (ou deux) dataset(s) CSV.
-
-    # Analyse d'un dataset
-    python -m clinical_synthetic_data.analysis --input dataset.csv --output reports/
-
-    # Comparaison de deux datasets (méthode 1 vs méthode 2)
-    python -m clinical_synthetic_data.analysis \\
-        --input dataset_copula.csv --compare dataset_ctgan.csv --output reports/
-"""
+"""CLI : analyse statistique d'un (ou deux) dataset(s) CSV."""
 
 from __future__ import annotations
 

@@ -1,33 +1,4 @@
-"""
-Interface graphique de démonstration — exécution par étapes
-===========================================================
-
-Application de bureau professionnelle pour présenter le pipeline de génération
-de données cliniques synthétiques (copule gaussienne + CTGAN).
-
-Principe
---------
-Le pipeline est découpé en 6 étapes **indépendantes**. Chaque étape possède
-son propre bouton d'exécution et affiche directement ses résultats dans
-l'interface (cartes de statistiques, tableaux, graphiques, métriques) — sans
-aucune console de type terminal.
-
-    1. Génération copule (Méthode 1)
-    2. Génération CTGAN  (Méthode 2)
-    3. Sauvegarde des datasets
-    4. Analyses statistiques
-    5. Visualisations
-    6. Évaluation ML
-
-Les étapes 2 à 6 nécessitent l'étape 1 (qui produit le dataset de base).
-
-Lancement
----------
-    python demo_app.py
-
-Dépendances : customtkinter, pillow, pandas, matplotlib, et le package
-clinical_synthetic_data du projet.
-"""
+"""Interface graphique de démonstration du pipeline (par étapes)."""
 
 from __future__ import annotations
 
@@ -52,10 +23,6 @@ except Exception:  # pragma: no cover
     _HAS_PIL = False
 
 
-# ---------------------------------------------------------------------------
-# Thème clair professionnel
-# ---------------------------------------------------------------------------
-
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
@@ -65,19 +32,18 @@ COL_CARD        = "#f8fafc"
 COL_CARD_HOVER  = "#eef2f7"
 COL_BORDER      = "#e2e8f0"
 COL_BADGE       = "#e2e8f0"
-COL_ACCENT      = "#0d9488"   # teal médical (primaire)
-COL_ACCENT_2    = "#4f46e5"   # indigo (CTGAN)
+COL_ACCENT      = "#0d9488"
+COL_ACCENT_2    = "#4f46e5"
 COL_OK          = "#059669"
 COL_RUN         = "#d97706"
 COL_PENDING     = "#cbd5e1"
 COL_ERR         = "#dc2626"
 COL_TXT         = "#1e293b"
 COL_TXT_DIM     = "#64748b"
-COL_SEL         = "#e0f2f1"   # surlignage de sélection (teal très clair)
+COL_SEL         = "#e0f2f1"
 
 FONT_FAMILY = "Segoe UI"
 
-# (index, titre, sous-titre, couleur d'accent)
 PHASES = [
     ("1", "Génération copule",     "Méthode 1 — copule gaussienne",    COL_ACCENT),
     ("2", "Génération CTGAN",      "Méthode 2 — réseau génératif",     COL_ACCENT_2),
@@ -111,11 +77,6 @@ FIG_FR = {
     "metrics_copula": "Performances ML",
     "cv_copula": "Validation croisée 5-fold",
 }
-
-
-# ---------------------------------------------------------------------------
-# Redirection stdout/stderr : extrait la progression tqdm (CTGAN)
-# ---------------------------------------------------------------------------
 
 
 class _StreamTee:
@@ -159,7 +120,7 @@ def _phase_step_methods(pipe):
 
 
 def phase_worker(app, idx, params, q):
-    """Exécute UNE étape du pipeline dans un thread, relayant l'état via la queue."""
+    """Exécute une étape du pipeline dans un thread."""
     import logging
 
     orig_out, orig_err = sys.stdout, sys.stderr
@@ -204,7 +165,6 @@ def phase_worker(app, idx, params, q):
                 raise RuntimeError(
                     "L'étape 1 (génération copule) doit être exécutée d'abord.")
             _phase_step_methods(pipe)[idx]()
-            # Met à jour summary.json après les étapes produisant des fichiers
             if idx in ("3", "5", "6"):
                 try:
                     pipe._step_save_summary()
@@ -216,11 +176,6 @@ def phase_worker(app, idx, params, q):
         q.put(("phase_error", (idx, traceback.format_exc())))
     finally:
         sys.stdout, sys.stderr = orig_out, orig_err
-
-
-# ---------------------------------------------------------------------------
-# Widget : élément de phase dans le navigateur
-# ---------------------------------------------------------------------------
 
 
 class PhaseItem(ctk.CTkFrame):
@@ -279,11 +234,6 @@ class PhaseItem(ctk.CTkFrame):
                                fg_color=self.accent if enabled else COL_PENDING)
 
 
-# ---------------------------------------------------------------------------
-# Application
-# ---------------------------------------------------------------------------
-
-
 class DemoApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -317,8 +267,6 @@ class DemoApp(ctk.CTk):
                 self.output_entry.insert(0, cand)
                 break
 
-    # ------------------------------------------------------------------
-
     def _setup_ttk_style(self):
         style = ttk.Style()
         try:
@@ -335,8 +283,6 @@ class DemoApp(ctk.CTk):
                   foreground=[("selected", "#ffffff")])
         style.map("Clinic.Treeview.Heading", background=[("active", "#0b7d72")])
 
-    # ------------------------------------------------------------------
-
     def _build_layout(self):
         self.grid_columnconfigure(0, weight=0)
         self.grid_columnconfigure(1, weight=0)
@@ -346,8 +292,6 @@ class DemoApp(ctk.CTk):
         self._build_sidebar()
         self._build_navigator()
         self._build_output()
-
-    # ---- Sidebar : configuration globale ----
 
     def _build_sidebar(self):
         bar = ctk.CTkScrollableFrame(self, width=300, fg_color=COL_PANEL,
@@ -434,8 +378,6 @@ class DemoApp(ctk.CTk):
                 fill="x", pady=(3, 0))
         return e
 
-    # ---- Navigateur de phases ----
-
     def _build_navigator(self):
         nav = ctk.CTkFrame(self, width=300, fg_color=COL_BG, corner_radius=0)
         nav.grid(row=0, column=1, sticky="nsew")
@@ -461,15 +403,12 @@ class DemoApp(ctk.CTk):
                      justify="left", anchor="w").grid(
             row=2, column=0, sticky="ew", padx=18, pady=(0, 16))
 
-    # ---- Zone de sortie ----
-
     def _build_output(self):
         wrap = ctk.CTkFrame(self, fg_color=COL_BG, corner_radius=0)
         wrap.grid(row=0, column=2, sticky="nsew")
         wrap.grid_rowconfigure(1, weight=1)
         wrap.grid_columnconfigure(0, weight=1)
 
-        # Bandeau d'en-tête de l'étape sélectionnée
         self.header = ctk.CTkFrame(wrap, fg_color=COL_PANEL, corner_radius=14,
                                    border_width=1, border_color=COL_BORDER)
         self.header.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 8))
@@ -499,20 +438,14 @@ class DemoApp(ctk.CTk):
                                     text_color=COL_RUN)
         self.h_timer.grid(row=0, column=3, rowspan=2, padx=(0, 16))
 
-        # Barre de progression (CTGAN)
         self.prog = ctk.CTkProgressBar(wrap, progress_color=COL_ACCENT_2,
                                        height=6)
         self.prog.set(0)
 
-        # Conteneur de sortie (rempli dynamiquement par étape)
         self.output = ctk.CTkFrame(wrap, fg_color="transparent")
         self.output.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
         self.output.grid_rowconfigure(0, weight=1)
         self.output.grid_columnconfigure(0, weight=1)
-
-    # ==================================================================
-    # Sélection / exécution
-    # ==================================================================
 
     def _phase_meta(self, idx):
         for p in PHASES:
@@ -608,10 +541,6 @@ class DemoApp(ctk.CTk):
             self.h_timer.configure(text=f"{el // 60:02d}:{el % 60:02d}")
             self.after(500, self._tick)
 
-    # ==================================================================
-    # Pompe d'événements
-    # ==================================================================
-
     def _poll_queue(self):
         try:
             while True:
@@ -651,10 +580,6 @@ class DemoApp(ctk.CTk):
         self._select_phase(idx)
         self._render_error(tb)
 
-    # ==================================================================
-    # Helpers d'accès aux données
-    # ==================================================================
-
     def _summary(self):
         if self._summary_cache is None:
             p = self.output_dir / "reports" / "summary.json"
@@ -665,7 +590,6 @@ class DemoApp(ctk.CTk):
         return self._summary_cache
 
     def _df(self, which):
-        """which = 'copula' | 'ctgan'. Mémoire d'abord, sinon CSV."""
         if self.pipeline is not None:
             df = getattr(self.pipeline, f"df_{which}", None)
             if df is not None:
@@ -692,10 +616,6 @@ class DemoApp(ctk.CTk):
             return json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             return None
-
-    # ==================================================================
-    # Rendu de la sortie par étape
-    # ==================================================================
 
     def _clear_output(self):
         for w in self.output.winfo_children():
@@ -761,8 +681,6 @@ class DemoApp(ctk.CTk):
         t.insert("end", tb)
         t.configure(state="disabled")
 
-    # ---- Étapes 1 & 2 : génération ----
-
     def _render_generation(self, which):
         stats = self._gen_stats(which)
         df = self._df(which)
@@ -796,8 +714,6 @@ class DemoApp(ctk.CTk):
         elif not stats:
             ctk.CTkLabel(scroll, text="Aucune donnée disponible.",
                          text_color=COL_TXT_DIM).grid(row=0, column=0, pady=30)
-
-    # ---- Étape 3 : datasets ----
 
     def _render_datasets(self):
         dd = self.output_dir / "datasets"
@@ -857,11 +773,7 @@ class DemoApp(ctk.CTk):
             ctk.CTkLabel(self._ds_table_holder, text=f"Erreur : {e}",
                          text_color=COL_ERR).grid(row=0, column=0, pady=20)
             return
-        # max_rows=None : affiche l'intégralité du dataset (défilement vertical),
-        # toutes classes confondues.
         self._table(self._ds_table_holder, df, max_rows=None, padded=True)
-
-    # ---- Étape 4 : analyses ----
 
     def _render_analysis(self):
         ana = self._read_json("analysis_report.json")
@@ -897,8 +809,6 @@ class DemoApp(ctk.CTk):
             for k, v in list(mc.items())[:10]:
                 if isinstance(v, (int, float, str)):
                     self._kv(card, str(k), str(v))
-
-    # ---- Étape 5 & 6 : figures / ML ----
 
     def _render_figures(self, patterns):
         fd = self.output_dir / "figures"
@@ -1023,7 +933,6 @@ class DemoApp(ctk.CTk):
                                 txt += f"  ± {std:.3f}"
                             self._kv(card, MODEL_FR.get(model, model), txt)
 
-            # Test croisé inter-méthodes (entraîné sur copule, testé sur CTGAN)
             cm = ml.get("cross_method", {})
             tstr = cm.get("train_on_main_test_on_other") if isinstance(cm, dict) else None
             if isinstance(tstr, dict):
@@ -1036,7 +945,6 @@ class DemoApp(ctk.CTk):
                         self._kv(card, MODEL_FR.get(model, model),
                                  f"accuracy = {mt['accuracy']:.3f}")
 
-        # Figures ML
         fd = self.output_dir / "figures"
         ml_figs = []
         if fd.exists():
@@ -1084,10 +992,6 @@ class DemoApp(ctk.CTk):
             lbl._ref = ci
         holder.bind("<Configure>", draw)
         win.after(200, draw)
-
-    # ==================================================================
-    # Petits composants réutilisables
-    # ==================================================================
 
     def _cards_row(self, parent, cards, row):
         f = ctk.CTkFrame(parent, fg_color="transparent")
@@ -1155,16 +1059,13 @@ class DemoApp(ctk.CTk):
         hsb.grid(row=1, column=0, sticky="ew")
         tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        # Polices réelles pour mesurer précisément la largeur du texte
         head_font = tkfont.Font(family=FONT_FAMILY, size=10, weight="bold")
         cell_font = tkfont.Font(family=FONT_FAMILY, size=10)
 
         cols = list(df.columns)
         tree["columns"] = cols
 
-        # Le dataset est généré classe par classe ; un simple head() ne montrerait
-        # que la 1re classe. On échantillonne donc sur tout le dataset pour que
-        # toutes les classes soient représentées.
+        # Échantillonne tout le dataset pour représenter toutes les classes.
         n = len(df)
         if max_rows is None or n <= max_rows:
             sample = df
@@ -1173,29 +1074,21 @@ class DemoApp(ctk.CTk):
             idx = sorted({min(int(i * step), n - 1) for i in range(max_rows)})
             sample = df.iloc[idx]
 
-        # Pré-formate les lignes affichées (arrondi des flottants)
         display_rows = [
             [round(v, 2) if isinstance(v, float) else v for v in rrow]
             for _, rrow in sample.iterrows()
         ]
 
         for ci, c in enumerate(cols):
-            # Largeur = max(en-tête, contenu échantillonné), bornée
             w = head_font.measure(str(c)) + 30
             for dr in display_rows:
                 w = max(w, cell_font.measure(str(dr[ci])) + 24)
             w = max(70, min(w, 320))
             tree.heading(c, text=c)
-            # stretch=False : conserve la largeur calculée et garde le défilement
-            # horizontal au lieu de re-tronquer les colonnes.
             tree.column(c, width=w, minwidth=w, anchor="center", stretch=False)
 
         for dr in display_rows:
             tree.insert("", "end", values=dr)
-
-    # ==================================================================
-    # Chargement de résultats existants
-    # ==================================================================
 
     def _on_load_existing(self):
         d = filedialog.askdirectory(
@@ -1207,7 +1100,6 @@ class DemoApp(ctk.CTk):
         self.output_dir = Path(d)
         self.pipeline = None
         self._summary_cache = None
-        # Marque comme « fait » ce qui existe sur le disque
         ddir, fdir, rdir = (self.output_dir / "datasets",
                             self.output_dir / "figures",
                             self.output_dir / "reports")

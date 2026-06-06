@@ -1,18 +1,4 @@
-"""
-Pipeline end-to-end de génération et évaluation de données cliniques.
-
-Orchestre l'ensemble du workflow conformément au rapport :
-    1. Génération du dataset par copule gaussienne (Méthode 1)
-    2. Entraînement de CTGAN sur ce dataset puis génération (Méthode 2)
-    3. Validation (déjà appliquée dans les générateurs)
-    4. Analyses statistiques (descriptives, corrélations, épidémiologiques)
-    5. Visualisations (distributions, scatter, corrélations, ML)
-    6. Évaluation ML (3 modèles × 3 protocoles)
-    7. Rapport JSON consolidé
-
-Une exécution complète produit le livrable demandé en section 4 du cahier
-des charges : code Python, datasets, analyses statistiques, figures, rapport.
-"""
+"""Pipeline end-to-end de génération et évaluation de données cliniques."""
 
 from __future__ import annotations
 
@@ -50,34 +36,9 @@ from ..visualization import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class PipelineConfig:
-    """
-    Configuration centrale du pipeline.
-
-    Attributs
-    ---------
-    m_per_class : int
-        Nombre de patients par classe pour la sortie finale (rapport : 1000).
-    output_dir : Path
-        Dossier racine où sauvegarder datasets, figures et rapports.
-    seed : int
-        Graine de reproductibilité (propagée à tous les générateurs).
-    ctgan_epochs : int
-        Nombre d'epochs d'entraînement CTGAN (rapport SDV : 300).
-    ctgan_batch_size : int
-        Taille de batch CTGAN.
-    skip_ctgan : bool
-        Si True, ne génère que le dataset copule (utile pour des itérations
-        rapides en développement).
-    skip_ml : bool
-        Si True, saute l'évaluation ML (utile en développement).
-    """
+    """Configuration centrale du pipeline."""
 
     m_per_class: int = 1000
     output_dir: Path = field(default_factory=lambda: Path("outputs"))
@@ -92,47 +53,27 @@ class PipelineConfig:
         self.output_dir = Path(self.output_dir)
 
 
-# ---------------------------------------------------------------------------
-# Pipeline
-# ---------------------------------------------------------------------------
-
-
 class SyntheticDataPipeline:
-    """
-    Pipeline orchestrant la génération, l'analyse et l'évaluation.
-
-    Usage
-    -----
-    >>> pipeline = SyntheticDataPipeline(config)
-    >>> pipeline.run()
-    """
+    """Pipeline orchestrant la génération, l'analyse et l'évaluation."""
 
     def __init__(self, config: Optional[PipelineConfig] = None) -> None:
         self.config = config or PipelineConfig()
         self.logger = logging.getLogger("pipeline")
 
-        # Chemins de sortie
         self._dirs = {
             "datasets":  self.config.output_dir / "datasets",
             "figures":   self.config.output_dir / "figures",
             "reports":   self.config.output_dir / "reports",
         }
 
-        # Résultats accumulés au fil de l'exécution
         self.df_copula: Optional[pd.DataFrame] = None
         self.df_ctgan: Optional[pd.DataFrame] = None
         self.copula_generator: Optional[GaussianCopulaGenerator] = None
         self.ctgan_generator: Optional[CTGANGenerator] = None
         self.timings: dict[str, float] = {}
 
-    # -----------------------------------------------------------------
-    # Point d'entrée
-    # -----------------------------------------------------------------
-
     def run(self) -> dict:
-        """
-        Exécute l'ensemble du pipeline et retourne le rapport consolidé.
-        """
+        """Exécute l'ensemble du pipeline et retourne le rapport consolidé."""
         self._setup_directories()
         self._log_header()
 
@@ -150,10 +91,6 @@ class SyntheticDataPipeline:
         summary = self._step_save_summary()
         self._log_footer()
         return summary
-
-    # -----------------------------------------------------------------
-    # Étapes
-    # -----------------------------------------------------------------
 
     def _setup_directories(self) -> None:
         for path in self._dirs.values():
@@ -185,7 +122,7 @@ class SyntheticDataPipeline:
         self.logger.info("=" * 70)
 
     def _timed(self, step_name: str):
-        """Context manager retournant le temps écoulé dans self.timings."""
+        """Context manager mesurant le temps écoulé dans self.timings."""
 
         class _Timer:
             def __init__(self_inner, owner, name):
@@ -206,10 +143,6 @@ class SyntheticDataPipeline:
 
         return _Timer(self, step_name)
 
-    # -----------------------------------------------------------------
-    # 1 — Génération copule
-    # -----------------------------------------------------------------
-
     def _step_generate_copula(self) -> None:
         with self._timed("1. Génération copule (Méthode 1)"):
             self.copula_generator = GaussianCopulaGenerator(seed=self.config.seed)
@@ -221,10 +154,6 @@ class SyntheticDataPipeline:
                 f"  → {len(self.df_copula)} patients valides "
                 f"(rejet global {stats['global_rejection_rate']:.1%})"
             )
-
-    # -----------------------------------------------------------------
-    # 2 — Génération CTGAN (entraînée sur copule)
-    # -----------------------------------------------------------------
 
     def _step_generate_ctgan(self) -> None:
         with self._timed("2. CTGAN (Méthode 2) — entraînement + génération"):
@@ -251,10 +180,6 @@ class SyntheticDataPipeline:
                 f"(rejet global {stats['global_rejection_rate']:.1%})"
             )
 
-    # -----------------------------------------------------------------
-    # 3 — Sauvegarde CSV
-    # -----------------------------------------------------------------
-
     def _step_save_datasets(self) -> None:
         with self._timed("3. Sauvegarde des datasets CSV"):
             path_copula = self._dirs["datasets"] / "dataset_copula.csv"
@@ -265,10 +190,6 @@ class SyntheticDataPipeline:
                 path_ctgan = self._dirs["datasets"] / "dataset_ctgan.csv"
                 self.df_ctgan.to_csv(path_ctgan, index=False)
                 self.logger.info(f"  ✓ {path_ctgan}")
-
-    # -----------------------------------------------------------------
-    # 4 — Analyses statistiques
-    # -----------------------------------------------------------------
 
     def _step_run_analysis(self) -> None:
         with self._timed("4. Analyses statistiques"):
@@ -301,10 +222,6 @@ class SyntheticDataPipeline:
             with open(output, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, ensure_ascii=False, default=str)
             self.logger.info(f"  ✓ {output}")
-
-    # -----------------------------------------------------------------
-    # 5 — Visualisations
-    # -----------------------------------------------------------------
 
     def _step_run_visualizations(self) -> None:
         with self._timed("5. Visualisations"):
@@ -360,10 +277,6 @@ class SyntheticDataPipeline:
         fig.savefig(path, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-    # -----------------------------------------------------------------
-    # 6 — Évaluation ML
-    # -----------------------------------------------------------------
-
     def _step_run_ml_evaluation(self) -> None:
         with self._timed("6. Évaluation ML"):
             self.logger.info("  Entraînement et évaluation des 3 modèles…")
@@ -373,7 +286,6 @@ class SyntheticDataPipeline:
                 seed=self.config.seed,
             )
 
-            # Résumé compact des résultats
             self.logger.info("  Résultats (split unique sur copule) :")
             for model_name, metrics in ml_report["single_split"].items():
                 auc = metrics.get("roc_auc_ovr_macro") or 0
@@ -389,7 +301,6 @@ class SyntheticDataPipeline:
                 json.dump(ml_report, f, indent=2, ensure_ascii=False, default=str)
             self.logger.info(f"  ✓ {output}")
 
-            # Figures ML
             fig_dir = self._dirs["figures"]
             self.logger.info("  Figures ML (confusion, métriques, validation croisée)…")
             single = ml_report["single_split"]
@@ -408,10 +319,6 @@ class SyntheticDataPipeline:
                     title="Validation croisée 5-fold — dataset copule"),
                 fig_dir / "cv_copula.png",
             )
-
-    # -----------------------------------------------------------------
-    # 7 — Sommaire
-    # -----------------------------------------------------------------
 
     def _step_save_summary(self) -> dict:
         cfg = self.config

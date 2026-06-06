@@ -1,8 +1,4 @@
-"""
-CLI : valide un dataset CSV existant.
-
-    python -m clinical_synthetic_data.validation --input dataset.csv
-"""
+"""CLI : valide un dataset CSV existant."""
 
 from __future__ import annotations
 
@@ -47,7 +43,7 @@ def main(argv=None) -> int:
 
     t0 = time.time()
     valid_count = 0
-    failures: list[tuple[int, str, str]] = []   # (index, classe, règle)
+    failures: list[tuple[int, str, str]] = []
     rule_counter: Counter = Counter()
     class_rule_counter: dict[str, Counter] = {}
 

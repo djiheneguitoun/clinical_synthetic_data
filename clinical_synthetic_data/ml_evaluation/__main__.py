@@ -1,14 +1,4 @@
-"""
-CLI : évalue les modèles ML (3 modèles × 3 protocoles) sur un dataset.
-
-    # Évaluation simple
-    python -m clinical_synthetic_data.ml_evaluation --input dataset.csv
-
-    # Avec transférabilité entre deux datasets
-    python -m clinical_synthetic_data.ml_evaluation \\
-        --input dataset_copula.csv --compare dataset_ctgan.csv \\
-        --output ml_report.json
-"""
+"""CLI : évalue les modèles ML (3 modèles × 3 protocoles) sur un dataset."""
 
 from __future__ import annotations
 

@@ -1,13 +1,4 @@
-"""
-Vérification des bornes physiologiques absolues (rapport section 5.2).
-
-Tout enregistrement dont au moins une variable continue sort des bornes
-absolues, ou dont une variable catégorielle prend une valeur hors modalités,
-est invalide et doit être rejeté.
-
-Les bornes proviennent exclusivement de `clinical_ranges` : ce module n'en
-duplique aucune.
-"""
+"""Vérification des bornes physiologiques absolues (rapport section 5.2)."""
 
 from __future__ import annotations
 
@@ -21,13 +12,7 @@ from ..config.clinical_ranges import (
 
 
 def violated_continuous_bound(p: Mapping[str, Any]) -> Optional[str]:
-    """
-    Cherche la première variable continue hors bornes absolues.
-
-    Retourne le nom de la variable fautive, ou None si toutes les valeurs
-    sont dans leurs bornes. Une valeur NaN ou infinie est considérée
-    comme une violation.
-    """
+    """Première variable continue hors bornes (NaN/inf compris), sinon None."""
     for name, spec in CONTINUOUS_VARIABLES.items():
         value = p.get(name)
         if value is None:
@@ -44,12 +29,7 @@ def violated_continuous_bound(p: Mapping[str, Any]) -> Optional[str]:
 
 
 def violated_categorical_modality(p: Mapping[str, Any]) -> Optional[str]:
-    """
-    Cherche la première variable catégorielle hors modalités déclarées.
-
-    Retourne le nom de la variable fautive, ou None si toutes les valeurs
-    sont valides.
-    """
+    """Première variable catégorielle hors modalités déclarées, sinon None."""
     for name, spec in CATEGORICAL_VARIABLES.items():
         value = p.get(name)
         if value is None:
@@ -60,13 +40,7 @@ def violated_categorical_modality(p: Mapping[str, Any]) -> Optional[str]:
 
 
 def check_absolute_bounds(p: Mapping[str, Any]) -> Optional[str]:
-    """
-    Vérifie l'ensemble des bornes (continues puis catégorielles).
-
-    Retourne None si tout est valide, sinon le nom de la première variable
-    fautive (préfixée par 'continuous:' ou 'categorical:' pour
-    distinguer le type d'échec).
-    """
+    """Vérifie les bornes continues puis catégorielles, retourne la 1re faute."""
     fault = violated_continuous_bound(p)
     if fault is not None:
         return f"continuous:{fault}"

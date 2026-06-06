@@ -1,11 +1,4 @@
-"""
-Visualisations des résultats ML (rapport section 8).
-
-- Matrices de confusion (une par modèle).
-- Comparaison des métriques entre modèles (bar chart).
-- Comparaison croisée des méthodes de génération sur la qualité de
-  classification.
-"""
+"""Visualisations des résultats ML."""
 
 from __future__ import annotations
 
@@ -16,11 +9,6 @@ import numpy as np
 import seaborn as sns
 
 from ..ml_evaluation.models import MODEL_DISPLAY_NAMES
-
-
-# ---------------------------------------------------------------------------
-# Matrice de confusion
-# ---------------------------------------------------------------------------
 
 
 def plot_confusion_matrix(
@@ -66,9 +54,7 @@ def plot_all_confusion_matrices(
     output_path: Optional[str] = None,
     title_suffix: str = "",
 ) -> plt.Figure:
-    """
-    Grille de matrices de confusion (une par modèle), normalisées par ligne.
-    """
+    """Grille de matrices de confusion (une par modèle), normalisées par ligne."""
     models = list(results.keys())
     n = len(models)
     fig, axes = plt.subplots(1, n, figsize=(7 * n, 6))
@@ -89,20 +75,13 @@ def plot_all_confusion_matrices(
     return fig
 
 
-# ---------------------------------------------------------------------------
-# Comparaison des modèles
-# ---------------------------------------------------------------------------
-
-
 def plot_model_metrics_comparison(
     results: dict,
     metrics: tuple[str, ...] = ("accuracy", "f1_macro", "roc_auc_ovr_macro"),
     output_path: Optional[str] = None,
     title: str = "Comparaison des modèles ML",
 ) -> plt.Figure:
-    """
-    Bar chart : pour chaque métrique (axe X), barres juxtaposées par modèle.
-    """
+    """Bar chart : pour chaque métrique (axe X), barres juxtaposées par modèle."""
     models = list(results.keys())
     display_names = [MODEL_DISPLAY_NAMES.get(m, m) for m in models]
 
@@ -120,7 +99,6 @@ def plot_model_metrics_comparison(
         offset = (i - len(models) / 2 + 0.5) * width
         bars = ax.bar(x + offset, values, width,
                       label=display_names[i], color=color, edgecolor="black", linewidth=0.5)
-        # Annotations
         for bar, val in zip(bars, values):
             if val > 0:
                 ax.text(bar.get_x() + bar.get_width() / 2, val + 0.01,
@@ -145,9 +123,7 @@ def plot_cross_validation_results(
     output_path: Optional[str] = None,
     title: str = "Validation croisée 5-fold (F1 macro)",
 ) -> plt.Figure:
-    """
-    Bar chart avec barres d'erreur : moyenne ± écart-type sur les folds.
-    """
+    """Bar chart avec barres d'erreur : moyenne ± écart-type sur les folds."""
     models = list(cv_results.keys())
     means = [cv_results[m]["mean"] for m in models]
     stds = [cv_results[m]["std"] for m in models]

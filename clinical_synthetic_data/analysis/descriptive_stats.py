@@ -1,12 +1,4 @@
-"""
-Statistiques descriptives du jeu de données (rapport section 6).
-
-Pour chaque jeu généré, calcule :
-    - moyenne, médiane, écart-type, IQR par classe et globalement (variables
-      continues) ;
-    - fréquences (counts et proportions) par classe (variables catégorielles).
-
-"""
+"""Statistiques descriptives du jeu de données."""
 
 from __future__ import annotations
 
@@ -15,19 +7,8 @@ import pandas as pd
 from ..core.patient_schema import CATEGORICAL_FIELDS, CONTINUOUS_FIELDS
 
 
-# ---------------------------------------------------------------------------
-# Statistiques sur les variables continues
-# ---------------------------------------------------------------------------
-
-
 def describe_continuous_global(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Statistiques descriptives globales (toutes classes confondues) pour les
-    variables continues.
-
-    Retourne un DataFrame indexé par variable, colonnes :
-        count, mean, std, min, q25, median, q75, max, iqr
-    """
+    """Statistiques descriptives globales pour les variables continues."""
     cols = [c for c in CONTINUOUS_FIELDS if c in df.columns]
     desc = df[cols].describe(percentiles=[0.25, 0.5, 0.75]).T
     desc = desc.rename(columns={
@@ -38,12 +19,7 @@ def describe_continuous_global(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def describe_continuous_by_class(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Statistiques descriptives stratifiées par classe.
-
-    Retourne un DataFrame avec MultiIndex (class_label, variable) et
-    colonnes : count, mean, std, min, median, max, iqr.
-    """
+    """Statistiques descriptives stratifiées par classe."""
     cols = [c for c in CONTINUOUS_FIELDS if c in df.columns]
     grouped = df.groupby("class_label")[cols]
 
@@ -58,7 +34,6 @@ def describe_continuous_by_class(df: pd.DataFrame) -> pd.DataFrame:
     ):
         pieces.append(grouped.agg(stat_fn).stack().rename(stat_name))
 
-    # IQR via groupby + quantile
     q25 = grouped.quantile(0.25).stack().rename("q25")
     q75 = grouped.quantile(0.75).stack().rename("q75")
     iqr = (q75 - q25).rename("iqr")
@@ -68,17 +43,8 @@ def describe_continuous_by_class(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-# ---------------------------------------------------------------------------
-# Statistiques sur les variables catégorielles
-# ---------------------------------------------------------------------------
-
-
 def describe_categorical_global(df: pd.DataFrame) -> dict[str, pd.Series]:
-    """
-    Proportions globales pour chaque variable catégorielle.
-
-    Retourne un dict {variable: Series(modalité -> proportion)}.
-    """
+    """Proportions globales pour chaque variable catégorielle."""
     cols = [c for c in CATEGORICAL_FIELDS if c in df.columns]
     return {
         col: df[col].value_counts(normalize=True).sort_index()
@@ -87,12 +53,7 @@ def describe_categorical_global(df: pd.DataFrame) -> dict[str, pd.Series]:
 
 
 def describe_categorical_by_class(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """
-    Proportions stratifiées par classe.
-
-    Retourne un dict {variable: DataFrame(class_label × modalité, valeurs en
-    proportions ligne par ligne)}.
-    """
+    """Proportions stratifiées par classe."""
     cols = [c for c in CATEGORICAL_FIELDS if c in df.columns]
     return {
         col: pd.crosstab(df["class_label"], df[col], normalize="index")
@@ -100,20 +61,8 @@ def describe_categorical_by_class(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Rapport agrégé
-# ---------------------------------------------------------------------------
-
-
 def build_descriptive_report(df: pd.DataFrame) -> dict:
-    """
-    Construit un rapport descriptif structuré, sérialisable en JSON.
-
-    Utile pour la production automatique du tableau « Caractéristiques de
-    l'échantillon » dans le rapport scientifique final.
-    """
-    # Aplatissement explicite : les MultiIndex doivent être convertis en
-    # dicts imbriqués pour rester JSON-sérialisables.
+    """Construit un rapport descriptif structuré, sérialisable en JSON."""
     by_class_continuous = describe_continuous_by_class(df).round(2)
     nested_continuous: dict = {}
     for (cls, var), row in by_class_continuous.iterrows():

@@ -1,12 +1,4 @@
-"""
-Génération par CTGAN (Conditional Tabular GAN, rapport section 4.2).
-
-Méthode 2 du pipeline : un GAN tabulaire conditionnel apprend la distribution
-jointe des variables cliniques à partir d'un jeu d'entraînement, puis génère
-de nouveaux échantillons. Le conditionnement s'effectue sur la variable de
-classe pour produire un jeu équilibré.
-
-"""
+"""Génération par CTGAN (Conditional Tabular GAN, Méthode 2)."""
 
 from __future__ import annotations
 
@@ -27,33 +19,11 @@ from ..validation import RejectionStatistics, validate
 from .base_generator import BaseGenerator
 
 
-# Bruit ajouté à la reconstruction Friedewald (cf. gaussian_copula.py)
 FRIEDEWALD_NOISE_STD: float = 3.0
 
 
 class CTGANGenerator(BaseGenerator):
-    """
-    Générateur appris par GAN tabulaire conditionnel.
-
-    Paramètres
-    ----------
-    epochs : int
-        Nombre d'epochs d'entraînement. Par défaut 300, conforme aux
-        recommandations de SDV pour des datasets de quelques milliers de
-        lignes. Réduire pour un développement rapide.
-    batch_size : int
-        Taille du batch d'entraînement. Par défaut 500.
-    enforce_derived_variables : bool
-        Si True (défaut), recalcule `weight` et `total_chol` à partir des
-        autres variables après échantillonnage, ce qui garantit R1 et R2
-        sans dépendre de la précision d'apprentissage du GAN.
-    seed : int, optionnel
-        Graine pour reproductibilité. Propagée à numpy, torch et SDV.
-    max_total_attempts_factor : int
-        Garde-fou anti-boucle infinie (cf. GaussianCopulaGenerator).
-    verbose : bool
-        Active les logs d'entraînement SDV.
-    """
+    """Générateur appris par GAN tabulaire conditionnel."""
 
     def __init__(
         self,
@@ -79,10 +49,6 @@ class CTGANGenerator(BaseGenerator):
         if seed is not None:
             self._set_seeds(seed)
 
-    # -----------------------------------------------------------------
-    # Initialisation déterministe
-    # -----------------------------------------------------------------
-
     @staticmethod
     def _set_seeds(seed: int) -> None:
         """Propage une graine à numpy et torch pour la reproductibilité."""
@@ -94,20 +60,10 @@ class CTGANGenerator(BaseGenerator):
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
         except ImportError:
-            # torch n'est pas installé : SDV ne devrait pas s'importer non plus
             pass
 
-    # -----------------------------------------------------------------
-    # Métadonnée SDV
-    # -----------------------------------------------------------------
-
     def _build_metadata(self, df: pd.DataFrame):
-        """
-        Construit la métadonnée SDV à partir du schéma typé du projet.
-
-        Variables continues  → sdtype='numerical'
-        Variables catégorielles + classe → sdtype='categorical'
-        """
+        """Construit la métadonnée SDV à partir du schéma typé du projet."""
         from sdv.metadata import SingleTableMetadata
 
         metadata = SingleTableMetadata()
@@ -125,15 +81,8 @@ class CTGANGenerator(BaseGenerator):
 
         return metadata
 
-    # -----------------------------------------------------------------
-    # Entraînement
-    # -----------------------------------------------------------------
-
     def fit(self, training_data: Optional[pd.DataFrame] = None) -> None:
-        """
-        Entraîne CTGAN sur `training_data` (typiquement le dataset produit
-        par la copule).
-        """
+        """Entraîne CTGAN sur `training_data` (typiquement le dataset copule)."""
         from sdv.single_table import CTGANSynthesizer
 
         if training_data is None or len(training_data) == 0:
@@ -142,8 +91,6 @@ class CTGANGenerator(BaseGenerator):
                 "Générer d'abord un dataset avec la copule (Méthode 1)."
             )
 
-        # `patient_id` est un identifiant unique sans valeur statistique :
-        # on le retire avant entraînement.
         train_df = training_data.drop(columns=["patient_id"], errors="ignore")
 
         self._metadata = self._build_metadata(train_df)
@@ -156,21 +103,12 @@ class CTGANGenerator(BaseGenerator):
         self._synthesizer.fit(train_df)
         self._is_fitted = True
 
-    # -----------------------------------------------------------------
-    # Échantillonnage avec validation
-    # -----------------------------------------------------------------
-
     def _sample_raw_batch(
         self,
         class_label: ClassLabel,
         n_rows: int,
     ) -> pd.DataFrame:
-        """
-        Échantillonne `n_rows` lignes brutes de CTGAN conditionnellement à
-        la classe demandée. SDV peut occasionnellement retourner moins de
-        lignes que demandé pour des classes très rares — on accepte cela
-        et la boucle d'échantillonnage compensera au prochain batch.
-        """
+        """Échantillonne `n_rows` lignes brutes conditionnellement à la classe."""
         from sdv.sampling import Condition
 
         condition = Condition(
@@ -182,21 +120,14 @@ class CTGANGenerator(BaseGenerator):
     def _enforce_constructive_constraints(
         self, df: pd.DataFrame
     ) -> pd.DataFrame:
-        """
-        Recalcule les variables dérivées pour garantir R1 et R2 exactement
-        (rapport 5.3). Strictement identique au post-traitement de la
-        copule, ce qui rend les deux méthodes comparables pour la
-        validation.
-        """
+        """Recalcule les variables dérivées pour garantir R1 et R2 exactement."""
         if not self.enforce_derived_variables:
             return df
 
         df = df.copy()
 
-        # R1 — Quetelet : weight = BMI · (height/100)²
         df["weight"] = df["bmi"] * (df["height"] / 100.0) ** 2
 
-        # R2 — Friedewald : total_chol = LDL + HDL + TG/5 + ε
         noise = np.random.normal(0.0, FRIEDEWALD_NOISE_STD, size=len(df))
         df["total_chol"] = (
             df["ldl"] + df["hdl"] + df["triglycerides"] / 5.0 + noise
@@ -208,17 +139,7 @@ class CTGANGenerator(BaseGenerator):
         class_label: ClassLabel,
         n: int,
     ) -> list[Patient]:
-        """
-        Échantillonne exactement `n` patients valides de la classe demandée.
-
-        Procédure :
-            1. Tirer un batch conditionnel via CTGAN.
-            2. Re-imposer R1 et R2 par construction.
-            3. Valider chaque candidat (bornes + R3 + R4 + classe).
-            4. Accepter / rejeter, accumuler les statistiques.
-            5. Itérer jusqu'à atteindre `n`, en sécurisant contre les
-               boucles infinies via `max_total_attempts_factor`.
-        """
+        """Échantillonne exactement `n` patients valides de la classe demandée."""
         if not self._is_fitted:
             raise RuntimeError(
                 "CTGAN n'est pas encore entraîné : appeler `fit()` avant "
@@ -238,9 +159,6 @@ class CTGANGenerator(BaseGenerator):
 
             df_batch = self._sample_raw_batch(class_label, batch_size)
             if len(df_batch) == 0:
-                # SDV n'a produit aucune ligne pour cette classe ; on
-                # retente avec un batch suivant. Si cela persiste, le
-                # garde-fou `max_attempts` lèvera une RuntimeError.
                 continue
 
             df_batch = self._enforce_constructive_constraints(df_batch)
@@ -260,8 +178,6 @@ class CTGANGenerator(BaseGenerator):
                     )
 
                 candidate = row.to_dict()
-                # Force la classe attendue (SDV peut occasionnellement
-                # dévier malgré la condition)
                 candidate["class_label"] = class_label.value
 
                 result = validate(candidate, class_label)
@@ -275,11 +191,6 @@ class CTGANGenerator(BaseGenerator):
                     self.stats.record_rejection(class_label, result.failed_rule)
 
         return accepted
-
-
-# ===========================================================================
-# CLI — exécution autonome
-# ===========================================================================
 
 
 def _build_cli_parser():
@@ -307,12 +218,7 @@ def _build_cli_parser():
 
 
 def main(argv=None) -> int:
-    """
-    Point d'entrée CLI.
-
-        python -m clinical_synthetic_data.generators.ctgan_generator \\
-            --training dataset_copula.csv --m 1000
-    """
+    """Point d'entrée CLI."""
     import logging
     import time
     import pandas as pd

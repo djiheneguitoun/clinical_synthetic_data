@@ -1,13 +1,4 @@
-"""
-Comparaison des deux méthodes de génération (rapport section 6).
-
-Confronte un dataset produit par la copule (Méthode 1) à un dataset produit
-par CTGAN (Méthode 2) sur trois axes :
-    1. Marginales : moyennes et écarts-types par variable et par classe.
-    2. Structure de corrélation : matrices et distance de Frobenius.
-    3. Distributions catégorielles : différences de proportions.
-
-"""
+"""Comparaison des deux méthodes de génération."""
 
 from __future__ import annotations
 
@@ -21,21 +12,13 @@ from .correlation_analysis import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Comparaison des marginales
-# ---------------------------------------------------------------------------
-
-
 def compare_continuous_means(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
     label_a: str = "method_A",
     label_b: str = "method_B",
 ) -> pd.DataFrame:
-    """
-    Compare les moyennes et écarts-types par classe pour chaque variable
-    continue. Retourne un DataFrame indexé par (class_label, variable).
-    """
+    """Compare les moyennes et écarts-types par classe pour chaque variable continue."""
     cols = [c for c in CONTINUOUS_FIELDS if c in df_a.columns and c in df_b.columns]
 
     means_a = df_a.groupby("class_label")[cols].mean()
@@ -57,30 +40,19 @@ def compare_continuous_means(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Comparaison des distributions catégorielles
-# ---------------------------------------------------------------------------
-
-
 def compare_categorical_distributions(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
     label_a: str = "method_A",
     label_b: str = "method_B",
 ) -> dict[str, pd.DataFrame]:
-    """
-    Pour chaque variable catégorielle, compare les proportions (par classe)
-    entre les deux datasets.
-
-    Retourne un dict {variable: DataFrame avec colonnes pivotées par méthode}.
-    """
+    """Compare les proportions catégorielles (par classe) entre les deux datasets."""
     cols = [c for c in CATEGORICAL_FIELDS if c in df_a.columns and c in df_b.columns]
 
     result: dict[str, pd.DataFrame] = {}
     for col in cols:
         props_a = pd.crosstab(df_a["class_label"], df_a[col], normalize="index")
         props_b = pd.crosstab(df_b["class_label"], df_b[col], normalize="index")
-        # Stack pour aligner sur (class_label, modalité)
         df = pd.DataFrame({
             label_a: props_a.stack(),
             label_b: props_b.stack(),
@@ -91,29 +63,15 @@ def compare_categorical_distributions(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Comparaison de la structure de corrélation
-# ---------------------------------------------------------------------------
-
-
 def compare_correlation_structures(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
 ) -> dict:
-    """
-    Compare les matrices de corrélation Pearson des deux datasets.
-
-    Retourne :
-        - matrices A et B
-        - différence terme à terme
-        - distance de Frobenius
-        - les 10 paires de variables où la corrélation diffère le plus
-    """
+    """Compare les matrices de corrélation Pearson des deux datasets."""
     corr_a = pearson_correlation_matrix(df_a)
     corr_b = pearson_correlation_matrix(df_b)
     diff = corr_a - corr_b
 
-    # Top divergences (triangle supérieur strict)
     diff_long_rows = []
     cols = list(diff.columns)
     for i, v1 in enumerate(cols):
@@ -139,22 +97,13 @@ def compare_correlation_structures(
     }
 
 
-# ---------------------------------------------------------------------------
-# Rapport agrégé
-# ---------------------------------------------------------------------------
-
-
 def build_method_comparison_report(
     df_copula: pd.DataFrame,
     df_ctgan: pd.DataFrame,
 ) -> dict:
-    """
-    Synthèse de la comparaison Méthode 1 vs Méthode 2 (rapport section 6).
-    """
+    """Synthèse de la comparaison Méthode 1 vs Méthode 2."""
     corr_comparison = compare_correlation_structures(df_copula, df_ctgan)
 
-    # Aplatissement explicite du DataFrame à MultiIndex pour rester
-    # JSON-sérialisable (tuple keys interdites en JSON).
     means_df = compare_continuous_means(
         df_copula, df_ctgan, label_a="copula", label_b="ctgan"
     ).round(3)

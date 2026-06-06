@@ -99,7 +99,6 @@ def NOTE(doc, text):
     return p
 
 
-# ===========================================================================
 doc = Document()
 doc.styles["Normal"].font.name = "Calibri"
 doc.styles["Normal"].font.size = Pt(10.5)
@@ -107,7 +106,6 @@ doc.styles["Normal"].font.size = Pt(10.5)
 H(doc, "Données cliniques synthétiques — explication du code", 0)
 P(doc, "")
 
-# --------------------------------------------------------------------------
 H(doc, "Vue d'ensemble", 1)
 P(doc, "Le projet est un **pipeline de génération de données** : il produit un "
        "jeu de patients synthétiques, le valide, l'analyse et l'évalue en "
@@ -120,13 +118,11 @@ P(doc, "L'approche encode des **connaissances médicales** (seuils ADA/ESC/OMS) 
 P(doc, "Ordre des modules : **config → core → generators → validation → analysis "
        "→ ml_evaluation → visualization → pipeline → run.py**.")
 
-# ===========================================================================
 H(doc, "MODULE 1 — config/", 1)
 P(doc, "Rôle du module : centraliser toutes les constantes du domaine. Le reste "
        "du code n'écrit aucun chiffre clinique en dur ; il importe depuis config. "
        "Détail ci-dessous fichier par fichier, section par section.")
 
-# ===========================================================================
 H(doc, "Fichier 1 — clinical_ranges.py", 1)
 P(doc, "But du fichier : décrire **chaque variable clinique** et **chaque seuil** "
        "qui servira à classer, générer et valider les patients. C'est le "
@@ -194,7 +190,6 @@ P(doc, "Utilité : fixer la marge d'erreur acceptée lors des contrôles de "
        "relations entre variables (module validation) — par ex. vérifier que "
        "l'IMC est bien cohérent avec poids et taille à ±0,5 près.")
 
-# ===========================================================================
 H(doc, "Fichier 2 — diagnostic_criteria.py", 1)
 P(doc, "But du fichier : répondre par oui/non à « ce patient a-t-il telle "
        "condition ? », à partir des seuils du fichier 1. 5 sections.")
@@ -237,7 +232,6 @@ P(doc, "Contenu : renvoie un dictionnaire {nom_du_facteur: True/False}.")
 P(doc, "Utilité : version détaillée du score, pour le débogage et les "
        "visualisations (savoir *quels* facteurs précis sont présents).")
 
-# ===========================================================================
 H(doc, "Fichier 3 — generation_params.py", 1)
 P(doc, "But du fichier : décrire statistiquement **chaque classe de patients** "
        "(quelles moyennes, quelles lois) pour que le générateur sache produire "
@@ -284,7 +278,6 @@ P(doc, "Utilité : garantir au chargement que chaque distribution catégorielle 
        "somme bien à 1 et n'utilise que des modalités déclarées. Sécurité contre "
        "les erreurs de saisie.")
 
-# ===========================================================================
 H(doc, "Fichier 4 — correlations.py", 1)
 P(doc, "But du fichier : fournir la **matrice de corrélation** qui dit comment "
        "les variables varient ensemble. Sans elle, les variables seraient "
@@ -325,14 +318,12 @@ NOTE(doc, "**À retenir :** config/ = référentiel (clinical_ranges) + règles 
           "(generation_params) + structure de corrélation (correlations). Chaque "
           "section a un rôle unique et les valeurs sont validées dès l'import.")
 
-# ===========================================================================
 H(doc, "MODULE 2 — core/", 1)
 P(doc, "Rôle du module : définir **ce qu'est un patient** (sa structure de "
        "données) et **comment lui attribuer sa classe**. Là où config/ contient "
        "des chiffres, core/ contient les objets manipulés par tout le pipeline. "
        "2 fichiers principaux.")
 
-# ===========================================================================
 H(doc, "Fichier 1 — patient_schema.py", 1)
 P(doc, "But du fichier : fournir une représentation **typée** d'un "
        "enregistrement patient (les 20 variables + identifiant + classe), avec "
@@ -382,7 +373,6 @@ P(doc, "Utilité : lister explicitement quelles variables sont continues et "
        "visualisations, ML) s'en sert pour traiter chaque type correctement "
        "sans recoder la liste à chaque fois.")
 
-# ===========================================================================
 H(doc, "Fichier 2 — class_assigner.py", 1)
 P(doc, "But du fichier : déterminer la classe **unique** d'un patient à partir de "
        "ses valeurs, selon une hiérarchie de priorité. C'est la règle qui "
@@ -429,9 +419,6 @@ NOTE(doc, "**À retenir :** core/ définit l'objet `Patient` (structure typée +
           "mono-label). C'est le pont entre les chiffres de config/ et les "
           "patients concrets manipulés par les générateurs et le validateur.")
 
-# ===========================================================================
-# MODULE 3 — generators/
-# ===========================================================================
 H(doc, "MODULE 3 — generators/", 1)
 P(doc, "Rôle du module : c'est le module qui **fabrique réellement les "
        "patients**. Il propose deux méthodes de génération différentes mais "
@@ -444,7 +431,6 @@ P(doc, "Rôle du module : c'est le module qui **fabrique réellement les "
        "boucle qui produit le jeu équilibré complet n'est écrite qu'une seule "
        "fois. Le module contient 3 fichiers.")
 
-# ---------------------------------------------------------------- Fichier 1
 H(doc, "Fichier 1 — base_generator.py", 1)
 P(doc, "But du fichier : définir le **contrat commun** à tous les générateurs. "
        "C'est une classe abstraite (`ABC`) : elle ne génère rien elle-même, mais "
@@ -482,7 +468,6 @@ P(doc, "Utilité : produire en **un seul appel le jeu équilibré complet** "
        "factorisée ici : copule et CTGAN n'ont qu'à fournir `sample_class`, et ils "
        "héritent gratuitement de cette boucle.")
 
-# ---------------------------------------------------------------- Fichier 2
 H(doc, "Fichier 2 — gaussian_copula.py (Méthode 1)", 1)
 P(doc, "But du fichier : générer des patients par **copule gaussienne**. "
        "L'idée centrale d'une copule est de **séparer deux choses** : d'un côté "
@@ -568,7 +553,6 @@ P(doc, "Utilité : `_generate_batch` est l'endroit où la cohérence est garanti
        "permet de lancer la Méthode 1 seule depuis le terminal "
        "(`python -m ...gaussian_copula --m 1000`).")
 
-# ---------------------------------------------------------------- Fichier 3
 H(doc, "Fichier 3 — ctgan_generator.py (Méthode 2)", 1)
 P(doc, "But du fichier : générer les patients avec un **CTGAN** (Conditional "
        "Tabular GAN), un réseau de neurones génératif spécialisé dans les "
@@ -647,9 +631,6 @@ NOTE(doc, "**À retenir :** generators/ repose sur une interface commune "
           "le cohérent) et réimposent par formule le poids et le cholestérol "
           "total, ce qui les rend rigoureusement comparables.")
 
-# ===========================================================================
-# MODULE 4 — validation/
-# ===========================================================================
 H(doc, "MODULE 4 — validation/", 1)
 P(doc, "Rôle du module : c'est le **filtre de qualité clinique**. À chaque fois "
        "qu'un générateur produit un patient candidat, il le soumet à ce module, "
@@ -660,7 +641,6 @@ P(doc, "Rôle du module : c'est le **filtre de qualité clinique**. À chaque fo
        "s'arrête au premier échec. Le module mesure aussi le coût de ce rejet "
        "(combien de candidats jetés, pour quelle raison). 5 fichiers.")
 
-# ---------------------------------------------------------------- Fichier 1
 H(doc, "Fichier 1 — validator.py (le point d'entrée)", 1)
 P(doc, "But du fichier : offrir **une seule fonction** `validate()` qui enchaîne "
        "tous les contrôles des autres fichiers. C'est ce que les générateurs "
@@ -697,7 +677,6 @@ P(doc, "Utilité : l'**ordre est délibérément optimisé pour la performance**
        "premier échec, on évite des calculs inutiles — ce qui compte beaucoup "
        "quand on valide des millions de candidats.")
 
-# ---------------------------------------------------------------- Fichier 2
 H(doc, "Fichier 2 — physiological_bounds.py", 1)
 P(doc, "But du fichier : première étape de la cascade — vérifier que chaque "
        "valeur reste dans les **limites physiologiques absolues** (et que les "
@@ -725,7 +704,6 @@ P(doc, "Contenu : combine les deux contrôles précédents et, en cas d'échec, 
 P(doc, "Utilité : fournir au validateur un **seul appel** pour toute la première "
        "étape, avec une cause lisible.")
 
-# ---------------------------------------------------------------- Fichier 3
 H(doc, "Fichier 3 — inter_variable_rules.py (règles R1 → R4)", 1)
 P(doc, "But du fichier : deuxième étape — vérifier la **cohérence entre "
        "variables**. Un patient peut avoir chaque valeur dans les bornes mais des "
@@ -776,7 +754,6 @@ P(doc, "Utilité : permettre au validateur de **parcourir les règles en boucle*
        "dans l'ordre, sans les appeler une par une en dur. Ajouter une règle R5 "
        "se ferait en une ligne ici.")
 
-# ---------------------------------------------------------------- Fichier 4
 H(doc, "Fichier 4 — class_coherence.py", 1)
 P(doc, "But du fichier : troisième et dernière étape — vérifier que la **classe "
        "annoncée correspond aux valeurs**. 1 section.")
@@ -793,7 +770,6 @@ P(doc, "Utilité : c'est la **pierre angulaire du cadre mono-label**. Elle "
        "« diabète » mais dont les valeurs, au final, ressembleraient davantage à "
        "un « risque cardiovasculaire ».")
 
-# ---------------------------------------------------------------- Fichier 5
 H(doc, "Fichier 5 — statistics.py", 1)
 P(doc, "But du fichier : **mesurer** la génération — combien de candidats "
        "tentés, acceptés, rejetés, et pour quelle raison. 1 section principale.")
@@ -819,9 +795,6 @@ NOTE(doc, "**À retenir :** validation/ est une **cascade** orchestrée par "
           "le processus. C'est ce module qui assure la **plausibilité clinique** "
           "exigée par le cahier des charges.")
 
-# ===========================================================================
-# MODULE 5 — analysis/
-# ===========================================================================
 H(doc, "MODULE 5 — analysis/", 1)
 P(doc, "Rôle du module : une fois le jeu généré et validé, il faut **prouver "
        "statistiquement qu'il est de bonne qualité**. Ce module ne génère ni ne "
@@ -833,7 +806,6 @@ P(doc, "Rôle du module : une fois le jeu généré et validé, il faut **prouve
        "Toutes les fonctions produisent des résultats **sérialisables en JSON** "
        "pour alimenter le rapport scientifique final. 4 fichiers.")
 
-# ---------------------------------------------------------------- Fichier 1
 H(doc, "Fichier 1 — descriptive_stats.py", 1)
 P(doc, "But du fichier : calculer les **statistiques descriptives** du jeu — les "
        "indicateurs classiques (moyenne, médiane, écart-type, quartiles) qui "
@@ -869,7 +841,6 @@ P(doc, "Utilité : produire un rapport unique, exportable et réutilisable "
        "(article, reproductibilité). L'aplatissement explicite évite l'erreur "
        "classique : JSON n'accepte pas les clés sous forme de tuple.")
 
-# ---------------------------------------------------------------- Fichier 2
 H(doc, "Fichier 2 — correlation_analysis.py", 1)
 P(doc, "But du fichier : analyser les **corrélations réellement présentes** dans "
        "le jeu généré, et les comparer soit à la cible imposée à la copule, soit "
@@ -908,7 +879,6 @@ P(doc, "Utilité : **vérification directe** que la copule a bien fait son trava
        "dans les données, la méthode est validée. Le tri par écart met en haut "
        "les paires les plus éloignées de la cible, à examiner en priorité.")
 
-# ---------------------------------------------------------------- Fichier 3
 H(doc, "Fichier 3 — epidemiological_validation.py", 1)
 P(doc, "But du fichier : vérifier que les classes générées respectent les "
        "**patterns cliniques connus** — autrement dit, confronter les données "
@@ -940,7 +910,6 @@ P(doc, "Contenu : synthèse — la liste détaillée des patterns, le nombre val
 P(doc, "Utilité : fournir une **preuve chiffrée du réalisme clinique** "
        "(« X patterns sur Y validés »), un argument fort pour l'article.")
 
-# ---------------------------------------------------------------- Fichier 4
 H(doc, "Fichier 4 — method_comparison.py", 1)
 P(doc, "But du fichier : comparer directement **la copule (Méthode 1) et le "
        "CTGAN (Méthode 2)** sur trois axes complémentaires. 4 sections.")
@@ -980,9 +949,6 @@ NOTE(doc, "**À retenir :** analysis/ apporte la **preuve statistique** de la "
           "deux méthodes (method_comparison). Tous les résultats sont exportés en "
           "JSON pour le rapport.")
 
-# ===========================================================================
-# MODULE 6 — ml_evaluation/
-# ===========================================================================
 H(doc, "MODULE 6 — ml_evaluation/", 1)
 P(doc, "Rôle du module : répondre à la question finale du cahier des charges — "
        "**le jeu synthétique est-il vraiment utile pour entraîner une IA ?** On "
@@ -992,7 +958,6 @@ P(doc, "Rôle du module : répondre à la question finale du cahier des charges 
        "module suit trois étapes : **préparer** les données pour les modèles, "
        "**définir** les modèles, puis les **entraîner et évaluer**. 3 fichiers.")
 
-# ---------------------------------------------------------------- Fichier 1
 H(doc, "Fichier 1 — preprocessing.py", 1)
 P(doc, "But du fichier : transformer les patients en **matrice numérique** "
        "exploitable par les algorithmes. Les modèles ne comprennent que des "
@@ -1030,7 +995,6 @@ P(doc, "Utilité : standardiser les continues évite qu'une variable à grande "
        "suivant), ce qui évite la **fuite de données** : les paramètres de "
        "normalisation sont calculés sur le train uniquement, jamais sur le test.")
 
-# ---------------------------------------------------------------- Fichier 2
 H(doc, "Fichier 2 — models.py", 1)
 P(doc, "But du fichier : définir les **trois familles de modèles** demandées par "
        "le cahier des charges, chacune représentant une approche différente de "
@@ -1062,7 +1026,6 @@ P(doc, "Utilité : permettre au reste du code (évaluation, figures) d'**itérer
        "automatiquement sur tous les modèles** sans les nommer un par un. Ajouter "
        "un 4ᵉ modèle ne demanderait qu'une ligne ici.")
 
-# ---------------------------------------------------------------- Fichier 3
 H(doc, "Fichier 3 — evaluation.py", 1)
 P(doc, "But du fichier : **entraîner et mesurer** les modèles selon trois "
        "protocoles de rigueur croissante, et produire un rapport de métriques. "

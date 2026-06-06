@@ -1,13 +1,4 @@
-"""
-CLI : produit les figures à partir d'un (ou deux) dataset(s) CSV.
-
-    # Figures d'un dataset
-    python -m clinical_synthetic_data.visualization --input dataset.csv --output figures/
-
-    # Comparaison
-    python -m clinical_synthetic_data.visualization \\
-        --input dataset_copula.csv --compare dataset_ctgan.csv --output figures/
-"""
+"""CLI : produit les figures à partir d'un (ou deux) dataset(s) CSV."""
 
 from __future__ import annotations
 

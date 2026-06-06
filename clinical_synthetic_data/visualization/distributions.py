@@ -1,10 +1,4 @@
-"""
-Visualisations de distributions (rapport section 7).
-
-Histogrammes et boxplots des variables continues, stratifiés par classe, avec
-lignes verticales aux seuils diagnostiques pour faciliter la lecture
-clinique.
-"""
+"""Visualisations de distributions (histogrammes et boxplots)."""
 
 from __future__ import annotations
 
@@ -19,18 +13,16 @@ from ..config import clinical_ranges as cr
 from ..core.patient_schema import ClassLabel
 
 
-# Palette stable pour les six classes (cohérente entre figures)
 CLASS_COLORS: dict[str, str] = {
-    ClassLabel.HEALTHY.value:      "#2ca02c",   # vert
-    ClassLabel.DIABETES.value:     "#d62728",   # rouge
-    ClassLabel.DYSLIPIDEMIA.value: "#ff7f0e",   # orange
-    ClassLabel.HYPERTENSION.value: "#9467bd",   # violet
-    ClassLabel.OBESITY.value:      "#8c564b",   # marron
-    ClassLabel.CV_RISK.value:      "#1f77b4",   # bleu
+    ClassLabel.HEALTHY.value:      "#2ca02c",
+    ClassLabel.DIABETES.value:     "#d62728",
+    ClassLabel.DYSLIPIDEMIA.value: "#ff7f0e",
+    ClassLabel.HYPERTENSION.value: "#9467bd",
+    ClassLabel.OBESITY.value:      "#8c564b",
+    ClassLabel.CV_RISK.value:      "#1f77b4",
 }
 
 
-# Lignes verticales aux seuils diagnostiques (variable -> liste de (seuil, label))
 DIAGNOSTIC_THRESHOLDS: dict[str, list[tuple[float, str]]] = {
     "fasting_glucose": [
         (cr.RF_GLUCOSE, "RF=100"),
@@ -70,18 +62,12 @@ DIAGNOSTIC_THRESHOLDS: dict[str, list[tuple[float, str]]] = {
 }
 
 
-# Variables clés mises en avant dans les figures (ordre de lecture clinique)
 KEY_VARIABLES: tuple[str, ...] = (
     "age", "bmi", "sbp", "dbp",
     "fasting_glucose", "hba1c",
     "ldl", "hdl", "triglycerides", "total_chol",
     "heart_rate", "weight",
 )
-
-
-# ---------------------------------------------------------------------------
-# Histogrammes
-# ---------------------------------------------------------------------------
 
 
 def plot_histograms_by_class(
@@ -91,11 +77,7 @@ def plot_histograms_by_class(
     title_suffix: str = "",
     bins: int = 30,
 ) -> plt.Figure:
-    """
-    Grille d'histogrammes : une cellule par variable, courbes superposées par
-    classe. Les seuils diagnostiques sont matérialisés par des lignes
-    verticales pointillées (RF en gris, DX en rouge).
-    """
+    """Grille d'histogrammes par variable, courbes superposées par classe."""
     variables = tuple(v for v in variables if v in df.columns)
     n_vars = len(variables)
     n_cols = 3
@@ -129,11 +111,9 @@ def plot_histograms_by_class(
         ax.set_ylabel("Densité", fontsize=9)
         ax.tick_params(labelsize=8)
 
-    # Cacher les axes restants
     for ax in axes[n_vars:]:
         ax.set_visible(False)
 
-    # Légende globale
     handles = [
         plt.Rectangle((0, 0), 1, 1, color=c, alpha=0.6)
         for c in CLASS_COLORS.values()
@@ -150,22 +130,13 @@ def plot_histograms_by_class(
     return fig
 
 
-# ---------------------------------------------------------------------------
-# Boxplots
-# ---------------------------------------------------------------------------
-
-
 def plot_boxplots_by_class(
     df: pd.DataFrame,
     variables: tuple[str, ...] = KEY_VARIABLES,
     output_path: Optional[str] = None,
     title_suffix: str = "",
 ) -> plt.Figure:
-    """
-    Grille de boxplots : une cellule par variable, classes en abscisse.
-    Vue compacte de la dispersion intra-classe et de la séparation
-    inter-classes.
-    """
+    """Grille de boxplots : une cellule par variable, classes en abscisse."""
     variables = tuple(v for v in variables if v in df.columns)
     n_vars = len(variables)
     n_cols = 3

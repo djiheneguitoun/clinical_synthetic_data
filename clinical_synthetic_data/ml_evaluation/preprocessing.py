@@ -1,16 +1,4 @@
-"""
-Pré-traitement des données pour l'évaluation ML (rapport section 8).
-
-Transforme un DataFrame patient en :
-    - matrice de features (X) : continues standardisées + catégorielles
-      encodées
-    - vecteur cible (y) : classe à prédire
-
-Encodage par type, conformément à la typologie de la section 2 du rapport :
-    - continues       → StandardScaler (centrage + réduction)
-    - nominales       → OneHotEncoder (sexe, statut tabagique)
-    - ordinales       → OrdinalEncoder avec ordre cliniquement significatif
-"""
+"""Pré-traitement des données pour l'évaluation ML (rapport section 8)."""
 
 from __future__ import annotations
 
@@ -25,14 +13,8 @@ from sklearn.preprocessing import (
 from ..core.patient_schema import CONTINUOUS_FIELDS
 
 
-# ---------------------------------------------------------------------------
-# Catégorisation des features (rapport 2.3)
-# ---------------------------------------------------------------------------
-
-# Variables catégorielles nominales : encodage one-hot
 NOMINAL_FIELDS: tuple[str, ...] = ("sex", "smoking")
 
-# Variables ordinales : encodage par rang croissant cliniquement significatif
 ORDINAL_FIELDS: tuple[str, ...] = (
     "physical_activity", "alcohol", "diet_quality",
 )
@@ -42,24 +24,11 @@ ORDINAL_CATEGORIES: dict[str, list[str]] = {
     "diet_quality":      ["Poor", "Average", "Good"],
 }
 
-# Colonnes à exclure des features (non explicatives)
 EXCLUDED_FROM_FEATURES: tuple[str, ...] = ("patient_id", "class_label")
 
 
-# ---------------------------------------------------------------------------
-# Construction du pipeline
-# ---------------------------------------------------------------------------
-
-
 def build_preprocessor() -> ColumnTransformer:
-    """
-    Pipeline de prétraitement sklearn (ColumnTransformer).
-
-    À utiliser dans un Pipeline avec le classifieur en aval pour éviter
-    les fuites entre train et test :
-        Pipeline([("preprocessor", build_preprocessor()),
-                  ("classifier", ...)])
-    """
+    """Pipeline de prétraitement sklearn (ColumnTransformer)."""
     return ColumnTransformer(
         transformers=[
             ("continuous", StandardScaler(), list(CONTINUOUS_FIELDS)),
@@ -85,18 +54,7 @@ def build_preprocessor() -> ColumnTransformer:
 def prepare_features_and_target(
     df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """
-    Sépare un DataFrame patient en features X et cible y.
-
-    Retourne
-    --------
-    X : pd.DataFrame
-        Features brutes (continues + catégorielles, non encodées).
-        L'encodage est fait par `build_preprocessor()` dans le Pipeline.
-    y : pd.Series
-        Étiquette de classe (chaîne, à passer telle quelle aux classifieurs
-        sklearn qui gèrent les chaînes nativement).
-    """
+    """Sépare un DataFrame patient en features X et cible y."""
     feature_cols = (
         list(CONTINUOUS_FIELDS) + list(NOMINAL_FIELDS) + list(ORDINAL_FIELDS)
     )

@@ -1,19 +1,4 @@
-"""
-Modèles d'apprentissage supervisé pour l'évaluation (rapport section 8).
-
-Trois familles de modèles, choisies pour couvrir le spectre demandé par
-le cahier des charges :
-
-    1. **Régression logistique multinomiale** : modèle linéaire interprétable,
-       baseline classique.
-    2. **Random Forest** : ensemble d'arbres, capture les non-linéarités et
-       les interactions sans réglage de paramètres lourd.
-    3. **MLP (Perceptron multi-couches)** : réseau de neurones simple,
-       2 couches cachées avec dropout implicite (early stopping).
-
-Chaque modèle est encapsulé dans un Pipeline sklearn intégrant le
-prétraitement, ce qui évite toute fuite entre train et test.
-"""
+"""Modèles d'apprentissage supervisé pour l'évaluation (rapport section 8)."""
 
 from __future__ import annotations
 
@@ -25,11 +10,6 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 
 from .preprocessing import build_preprocessor
-
-
-# ---------------------------------------------------------------------------
-# Factories : chacun retourne un Pipeline (preprocessor + classifier)
-# ---------------------------------------------------------------------------
 
 
 def make_logistic_regression(seed: int = 42) -> Pipeline:
@@ -67,22 +47,14 @@ def make_mlp(seed: int = 42) -> Pipeline:
             hidden_layer_sizes=(64, 32),
             activation="relu",
             solver="adam",
-            alpha=1e-4,                    # régularisation L2
+            alpha=1e-4,
             learning_rate_init=1e-3,
             max_iter=300,
-            # early_stopping désactivé : un bug sklearn fait échouer le
-            # scoring interne quand y contient des chaînes (notre cas).
-            # La régularisation L2 (alpha) compense l'absence
-            # d'early-stopping en pratique sur ce volume de données.
+            # désactivé : bug sklearn sur le scoring interne quand y est str
             early_stopping=False,
             random_state=seed,
         )),
     ])
-
-
-# ---------------------------------------------------------------------------
-# Registre exposé
-# ---------------------------------------------------------------------------
 
 
 MODEL_FACTORIES: dict[str, Callable[..., Pipeline]] = {

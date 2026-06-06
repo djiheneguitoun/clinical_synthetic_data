@@ -1,15 +1,4 @@
-"""
-Collecteur de statistiques de rejet (rapport section 5.6).
-
-Suit, pour chaque session de génération :
-    - le taux de rejet global et par classe ;
-    - le taux de rejet par règle (bornes, R1, R2, R3, R4, classe) ;
-    - le nombre moyen de tentatives par patient accepté.
-
-Conçu pour être thread-safe en lecture seule après finalisation, et
-légèrement coûteux à mettre à jour pour rester utilisable dans la boucle
-de rejection sampling.
-"""
+"""Collecteur de statistiques de rejet (rapport section 5.6)."""
 
 from __future__ import annotations
 
@@ -22,20 +11,7 @@ from ..core.patient_schema import ClassLabel
 
 @dataclass
 class RejectionStatistics:
-    """
-    Compteurs de tentatives et de rejets.
-
-    Attributs
-    ---------
-    attempts_per_class : Counter[ClassLabel]
-        Nombre total de candidats générés, par classe cible.
-    accepted_per_class : Counter[ClassLabel]
-        Nombre de candidats acceptés, par classe cible.
-    rejections_per_rule : Counter[str]
-        Nombre total de rejets, agrégés par identifiant de règle.
-    rejections_per_rule_per_class : dict[ClassLabel, Counter[str]]
-        Distribution fine des rejets par classe ET par règle.
-    """
+    """Compteurs de tentatives et de rejets."""
 
     attempts_per_class: Counter = field(default_factory=Counter)
     accepted_per_class: Counter = field(default_factory=Counter)
@@ -43,10 +19,6 @@ class RejectionStatistics:
     rejections_per_rule_per_class: dict = field(
         default_factory=lambda: defaultdict(Counter)
     )
-
-    # -----------------------------------------------------------------
-    # Mises à jour
-    # -----------------------------------------------------------------
 
     def record_attempt(self, target_class: ClassLabel) -> None:
         self.attempts_per_class[target_class] += 1
@@ -61,10 +33,6 @@ class RejectionStatistics:
     ) -> None:
         self.rejections_per_rule[failed_rule] += 1
         self.rejections_per_rule_per_class[target_class][failed_rule] += 1
-
-    # -----------------------------------------------------------------
-    # Lecture
-    # -----------------------------------------------------------------
 
     def total_attempts(self) -> int:
         return sum(self.attempts_per_class.values())

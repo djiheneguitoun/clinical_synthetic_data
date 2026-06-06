@@ -1,19 +1,12 @@
-"""
-Plages cliniques de référence et seuils diagnostiques.
-"""
+"""Plages cliniques de référence et seuils diagnostiques."""
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
 
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-
-
 class VariableType(str, Enum):
-    """Typologie statistique d'une variable (rapport 2.3)."""
+    """Typologie statistique d'une variable."""
 
     CONTINUOUS = "continuous"
     BINARY_CATEGORICAL = "binary_categorical"
@@ -23,23 +16,7 @@ class VariableType(str, Enum):
 
 @dataclass(frozen=True)
 class ContinuousVariableSpec:
-    """
-    Spécification d'une variable continue.
-
-    Attributs
-    ---------
-    name : str
-        Identifiant interne (snake_case).
-    display_name : str
-        Nom à afficher (français, accentué).
-    unit : str
-        Unité clinique.
-    absolute_min, absolute_max : float
-        Bornes physiologiques absolues utilisées pour le rejet en
-        section 5.2 du rapport.
-    normal_min, normal_max : float
-        Plage normale clinique (section 3.2 du rapport).
-    """
+    """Spécification d'une variable continue."""
 
     name: str
     display_name: str
@@ -60,17 +37,13 @@ class ContinuousVariableSpec:
 
 @dataclass(frozen=True)
 class CategoricalVariableSpec:
-    """Spécification d'une variable catégorielle (binaire, nominale ou ordinale)."""
+    """Spécification d'une variable catégorielle."""
 
     name: str
     display_name: str
     var_type: VariableType
     modalities: tuple[str, ...]
 
-
-# ---------------------------------------------------------------------------
-# Variables démographiques (rapport 3.2.1)
-# ---------------------------------------------------------------------------
 
 AGE = ContinuousVariableSpec(
     name="age",
@@ -112,10 +85,6 @@ BMI = ContinuousVariableSpec(
     normal_max=24.9,
 )
 
-# ---------------------------------------------------------------------------
-# Signes vitaux (rapport 3.2.2)
-# ---------------------------------------------------------------------------
-
 HEART_RATE = ContinuousVariableSpec(
     name="heart_rate",
     display_name="Fréquence cardiaque",
@@ -132,7 +101,7 @@ SBP = ContinuousVariableSpec(
     unit="mmHg",
     absolute_min=70.0,
     absolute_max=220.0,
-    normal_min=90.0,   # plancher clinique du normal (< 120 cible)
+    normal_min=90.0,
     normal_max=119.0,
 )
 
@@ -165,10 +134,6 @@ TEMPERATURE = ContinuousVariableSpec(
     normal_min=36.1,
     normal_max=37.2,
 )
-
-# ---------------------------------------------------------------------------
-# Résultats de laboratoire (rapport 3.2.3)
-# ---------------------------------------------------------------------------
 
 FASTING_GLUCOSE = ContinuousVariableSpec(
     name="fasting_glucose",
@@ -216,7 +181,7 @@ HDL = ContinuousVariableSpec(
     unit="mg/dL",
     absolute_min=15.0,
     absolute_max=120.0,
-    normal_min=40.0,   # plancher H ; pour F le plancher clinique est 50
+    normal_min=40.0,
     normal_max=80.0,
 )
 
@@ -230,10 +195,6 @@ TRIGLYCERIDES = ContinuousVariableSpec(
     normal_max=149.0,
 )
 
-
-# ---------------------------------------------------------------------------
-# Variables catégorielles et de mode de vie (rapport 3.2.4)
-# ---------------------------------------------------------------------------
 
 SEX = CategoricalVariableSpec(
     name="sex",
@@ -271,10 +232,6 @@ DIET_QUALITY = CategoricalVariableSpec(
 )
 
 
-# ---------------------------------------------------------------------------
-# Registres exposés
-# ---------------------------------------------------------------------------
-
 CONTINUOUS_VARIABLES: dict[str, ContinuousVariableSpec] = {
     v.name: v for v in (
         AGE, HEIGHT, WEIGHT, BMI,
@@ -288,61 +245,37 @@ CATEGORICAL_VARIABLES: dict[str, CategoricalVariableSpec] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Seuils diagnostiques (rapport section 3.3)
-# ---------------------------------------------------------------------------
-#
-# Convention de nommage :
-#   DX_*  → seuil diagnostique pathologique strict (entrée de classe)
-#   RF_*  → seuil de facteur de risque (zone intermédiaire pour la classe
-#           « risque cardiovasculaire »)
-#
-# Tous les seuils sont conformes au rapport, qui s'appuie sur :
-#   - ADA Standards of Care 2025 (diabète)
-#   - ESC/EAS 2025 (dyslipidémies)
-#   - ESC 2024 (hypertension)
-#   - WHO 2025 (obésité)
-# ---------------------------------------------------------------------------
+# DX_* : seuil diagnostique strict ; RF_* : seuil de facteur de risque
+DX_GLUCOSE: float = 126.0
+DX_HBA1C: float = 6.5
 
+RF_GLUCOSE: float = 100.0
+RF_HBA1C: float = 5.7
 
-# --- Diabète (ADA 2025) ---
-DX_GLUCOSE: float = 126.0           # mg/dL, glycémie à jeun
-DX_HBA1C: float = 6.5               # %
+DX_TOTAL_CHOL: float = 240.0
+DX_LDL: float = 160.0
+DX_TRIGLYCERIDES: float = 200.0
+DX_HDL_LOW_MALE: float = 40.0
+DX_HDL_LOW_FEMALE: float = 50.0
 
-# --- Pré-diabète / facteur de risque (ADA 2025) ---
-RF_GLUCOSE: float = 100.0           # mg/dL
-RF_HBA1C: float = 5.7               # %
+RF_TOTAL_CHOL: float = 200.0
+RF_LDL: float = 130.0
+RF_TRIGLYCERIDES: float = 150.0
 
-# --- Dyslipidémie (ESC/EAS 2025) ---
-DX_TOTAL_CHOL: float = 240.0        # mg/dL : cholestérol total élevé
-DX_LDL: float = 160.0               # mg/dL
-DX_TRIGLYCERIDES: float = 200.0     # mg/dL
-DX_HDL_LOW_MALE: float = 40.0       # mg/dL : HDL bas chez l'homme
-DX_HDL_LOW_FEMALE: float = 50.0     # mg/dL : HDL bas chez la femme
+DX_SBP: float = 140.0
+DX_DBP: float = 90.0
 
-# --- Facteurs de risque lipidique (zone intermédiaire) ---
-RF_TOTAL_CHOL: float = 200.0        # mg/dL : cholestérol total souhaitable
-RF_LDL: float = 130.0               # mg/dL : LDL borderline
-RF_TRIGLYCERIDES: float = 150.0     # mg/dL : TG borderline
+RF_SBP: float = 120.0
+RF_DBP: float = 80.0
 
-# --- Hypertension (ESC 2024) ---
-DX_SBP: float = 140.0               # mmHg
-DX_DBP: float = 90.0                # mmHg
+DX_BMI: float = 30.0
+RF_BMI: float = 25.0
 
-# --- Pression artérielle élevée (facteur de risque) ---
-RF_SBP: float = 120.0               # mmHg
-RF_DBP: float = 80.0                # mmHg
-
-# --- Obésité (WHO 2025) ---
-DX_BMI: float = 30.0                # kg/m²
-RF_BMI: float = 25.0                # kg/m² : surpoids = facteur de risque
-
-# --- Fréquence cardiaque (facteur de risque CV) ---
-RF_HEART_RATE: float = 80.0         # bpm au repos
+RF_HEART_RATE: float = 80.0
 
 
 def hdl_low_threshold(sex: str) -> float:
-    """Retourne le seuil HDL bas selon le sexe (rapport 3.2.3 et 3.3.3)."""
+    """Retourne le seuil HDL bas selon le sexe."""
     if sex == "Male":
         return DX_HDL_LOW_MALE
     if sex == "Female":
@@ -350,12 +283,8 @@ def hdl_low_threshold(sex: str) -> float:
     raise ValueError(f"Sexe inconnu : {sex!r}. Attendu 'Male' ou 'Female'.")
 
 
-# ---------------------------------------------------------------------------
-# Tolérances pour les contrôles de cohérence (rapport section 5.3)
-# ---------------------------------------------------------------------------
-
-TOLERANCE_BMI: float = 0.5          # kg/m² (R1, Quetelet)
-TOLERANCE_FRIEDEWALD: float = 10.0  # mg/dL (R2, Friedewald)
-MIN_PULSE_PRESSURE: float = 20.0    # mmHg (R3)
-MAX_PULSE_PRESSURE: float = 100.0   # mmHg (R3)
-FRIEDEWALD_TG_LIMIT: float = 400.0  # mg/dL : Friedewald non applicable au-delà
+TOLERANCE_BMI: float = 0.5
+TOLERANCE_FRIEDEWALD: float = 10.0
+MIN_PULSE_PRESSURE: float = 20.0
+MAX_PULSE_PRESSURE: float = 100.0
+FRIEDEWALD_TG_LIMIT: float = 400.0

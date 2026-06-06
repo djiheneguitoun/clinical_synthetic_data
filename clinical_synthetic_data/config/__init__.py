@@ -33,25 +33,21 @@ from .generation_params import (
 )
 
 __all__ = [
-    # clinical_ranges
     "CONTINUOUS_VARIABLES",
     "CATEGORICAL_VARIABLES",
     "ContinuousVariableSpec",
     "CategoricalVariableSpec",
     "VariableType",
     "hdl_low_threshold",
-    # diagnostic_criteria
     "count_cv_risk_factors",
     "cv_risk_factors_breakdown",
     "is_diabetic",
     "is_dyslipidemic",
     "is_hypertensive",
     "is_obese",
-    # generation_params
     "ContinuousParam",
     "CONTINUOUS_PARAMS_BY_CLASS",
     "CATEGORICAL_PROBS_BY_CLASS",
-    # correlations
     "COPULA_VARIABLES",
     "COPULA_INDEX",
     "CORRELATION_PAIRS",

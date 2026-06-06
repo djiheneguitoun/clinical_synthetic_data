@@ -1,3 +1,4 @@
+"""Validation épidémiologique des patterns cliniques attendus."""
 
 from __future__ import annotations
 
@@ -13,14 +14,13 @@ from ..config.clinical_ranges import (
 from ..core.patient_schema import ClassLabel
 
 
-# Patterns cliniques attendus (rapport sections 1 et 3)
 EXPECTED_PATTERNS = {
     ClassLabel.DIABETES: {
         "fasting_glucose": ("min_mean", DX_GLUCOSE),
         "hba1c":           ("min_mean", DX_HBA1C),
     },
     ClassLabel.DYSLIPIDEMIA: {
-        "ldl":             ("min_mean", DX_LDL * 0.85),   # pas tous LDL-élevés
+        "ldl":             ("min_mean", DX_LDL * 0.85),
     },
     ClassLabel.HYPERTENSION: {
         "sbp":             ("min_mean", DX_SBP),
@@ -36,9 +36,7 @@ EXPECTED_PATTERNS = {
 }
 
 
-# Patterns liés à l'âge : classes pathologiques chroniques tendent à être plus âgées
 EXPECTED_AGE_ORDERING = (
-    # (jeune)  HEALTHY < OBESITY < DYSLIPIDEMIA, DIABETES, HYPERTENSION < CV_RISK  (vieux)
     (ClassLabel.HEALTHY, ClassLabel.HYPERTENSION),
     (ClassLabel.HEALTHY, ClassLabel.CV_RISK),
     (ClassLabel.HEALTHY, ClassLabel.DIABETES),
@@ -52,12 +50,7 @@ def check_expected_pattern(
     rule: str,
     threshold: float,
 ) -> dict:
-    """
-    Vérifie qu'un pattern attendu est satisfait dans une classe.
-
-    `rule` est `"min_mean"` (la moyenne doit être ≥ threshold) ou
-    `"max_mean"` (la moyenne doit être ≤ threshold).
-    """
+    """Vérifie qu'un pattern attendu est satisfait dans une classe."""
     subset = df[df["class_label"] == class_label.value]
     if len(subset) == 0:
         return {"passed": False, "reason": f"Classe {class_label.value} absente"}
@@ -81,12 +74,7 @@ def check_expected_pattern(
 
 
 def validate_all_patterns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Lance toutes les vérifications de pattern et retourne un tableau résumé.
-
-    Le rapport peut inclure ce tableau pour démontrer que les classes
-    générées respectent leurs caractéristiques cliniques attendues.
-    """
+    """Lance toutes les vérifications de pattern et retourne un tableau résumé."""
     rows = []
     for class_label, checks in EXPECTED_PATTERNS.items():
         for variable, (rule, threshold) in checks.items():
@@ -95,10 +83,7 @@ def validate_all_patterns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def check_age_ordering(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Vérifie que l'âge moyen suit la hiérarchie attendue (classes pathologiques
-    plus âgées que la classe HEALTHY).
-    """
+    """Vérifie que l'âge moyen suit la hiérarchie attendue."""
     means = df.groupby("class_label")["age"].mean().to_dict()
 
     rows = []
