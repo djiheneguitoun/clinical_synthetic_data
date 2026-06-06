@@ -47,11 +47,14 @@ FONT_FAMILY = "Segoe UI"
 PHASES = [
     ("1", "Génération copule",     "Méthode 1 — copule gaussienne",    COL_ACCENT),
     ("2", "Génération CTGAN",      "Méthode 2 — réseau génératif",     COL_ACCENT_2),
+    ("V", "Validation",            "Rejets par règle • cohérence",     "#16a34a"),
     ("3", "Sauvegarde datasets",   "Export des fichiers CSV",          "#0891b2"),
     ("4", "Analyses statistiques", "Descriptives • corrélations",      "#7c3aed"),
     ("5", "Visualisations",        "Distributions • heatmaps",         "#db2777"),
     ("6", "Évaluation ML",         "3 modèles • validation croisée",   "#ea580c"),
 ]
+
+VIEW_ONLY = {"V"}
 
 CLASS_FR = {
     "sain": "Sain", "diabete": "Diabète", "dyslipidemie": "Dyslipidémie",
@@ -62,6 +65,15 @@ CLASS_FR = {
 MODEL_FR = {
     "logistic_regression": "Régression logistique",
     "random_forest": "Forêt aléatoire", "mlp": "Réseau de neurones (MLP)",
+}
+
+RULE_FR = {
+    "bounds": "Bornes physiologiques absolues",
+    "R1_quetelet": "R1 — IMC (formule de Quetelet)",
+    "R2_friedewald": "R2 — Bilan lipidique (Friedewald)",
+    "R3_pulse_pressure": "R3 — Pression pulsée (PAS − PAD)",
+    "R4_glucose_hba1c": "R4 — Cohérence glycémie / HbA1c",
+    "class_coherence": "Cohérence de classe diagnostique",
 }
 
 FIG_FR = {
@@ -180,13 +192,14 @@ def phase_worker(app, idx, params, q):
 
 class PhaseItem(ctk.CTkFrame):
     def __init__(self, master, idx, title, subtitle, accent,
-                 on_select, on_run):
+                 on_select, on_run, runnable=True):
         super().__init__(master, fg_color=COL_PANEL, corner_radius=12,
                          border_width=1, border_color=COL_BORDER)
         self.idx = idx
         self.accent = accent
         self.on_select = on_select
         self.on_run = on_run
+        self.runnable = runnable
         self.state = "pending"
         self.grid_columnconfigure(1, weight=1)
 
@@ -203,12 +216,19 @@ class PhaseItem(ctk.CTkFrame):
                                 font=(FONT_FAMILY, 11), text_color=COL_TXT_DIM)
         self.sub.grid(row=1, column=1, sticky="ew", pady=(0, 10))
 
-        self.run_btn = ctk.CTkButton(
-            self, text="▶", width=40, height=40, corner_radius=10,
-            font=(FONT_FAMILY, 15, "bold"), fg_color=accent,
-            hover_color=COL_TXT, text_color="#ffffff",
-            command=lambda: self.on_run(self.idx))
-        self.run_btn.grid(row=0, column=2, rowspan=2, padx=(6, 12), pady=10)
+        if runnable:
+            self.run_btn = ctk.CTkButton(
+                self, text="▶", width=40, height=40, corner_radius=10,
+                font=(FONT_FAMILY, 15, "bold"), fg_color=accent,
+                hover_color=COL_TXT, text_color="#ffffff",
+                command=lambda: self.on_run(self.idx))
+            self.run_btn.grid(row=0, column=2, rowspan=2, padx=(6, 12), pady=10)
+        else:
+            self.run_btn = None
+            eye = ctk.CTkLabel(self, text="👁", width=40,
+                               font=(FONT_FAMILY, 16), text_color=COL_TXT_DIM)
+            eye.grid(row=0, column=2, rowspan=2, padx=(6, 12), pady=10)
+            eye.bind("<Button-1>", lambda e: self.on_select(self.idx))
 
         for w in (self, self.title, self.sub, self.dot):
             w.bind("<Button-1>", lambda e: self.on_select(self.idx))
@@ -230,6 +250,8 @@ class PhaseItem(ctk.CTkFrame):
             self.dot.configure(text="○", text_color=COL_PENDING)
 
     def set_enabled(self, enabled: bool):
+        if self.run_btn is None:
+            return
         self.run_btn.configure(state="normal" if enabled else "disabled",
                                fg_color=self.accent if enabled else COL_PENDING)
 
@@ -393,7 +415,8 @@ class DemoApp(ctk.CTk):
         lst.grid_columnconfigure(0, weight=1)
         for i, (idx, title, sub, accent) in enumerate(PHASES):
             item = PhaseItem(lst, idx, title, sub, accent,
-                             self._select_phase, self._run_phase)
+                             self._select_phase, self._run_phase,
+                             runnable=idx not in VIEW_ONLY)
             item.grid(row=i, column=0, sticky="ew", padx=4, pady=5)
             self.items[idx] = item
 
@@ -464,8 +487,18 @@ class DemoApp(ctk.CTk):
         self._render_output(idx)
 
     def _update_header_status(self):
+        for v in VIEW_ONLY:
+            self.done[v] = self.done["1"]
         idx = self.selected
         _, _, sub, accent = self._phase_meta(idx)
+        if idx in VIEW_ONLY:
+            self.h_run.grid_remove()
+            self.h_timer.configure(text="")
+            self.h_status.configure(
+                text="✓  Statistiques de validation ci-dessous"
+                if self.done[idx] else sub)
+            return
+        self.h_run.grid()
         if self.running_idx == idx:
             self.h_status.configure(text="Exécution en cours…")
         elif self.done[idx]:
@@ -481,7 +514,12 @@ class DemoApp(ctk.CTk):
 
     def _refresh_enabled(self):
         base = self.done["1"]
+        for v in VIEW_ONLY:
+            self.done[v] = base
         for idx, it in self.items.items():
+            if idx in VIEW_ONLY:
+                it.set_state("done" if self.done[idx] else "pending")
+                continue
             it.set_enabled((idx == "1" or base) and self.running_idx is None)
         self.runall_btn.configure(
             state="normal" if self.running_idx is None else "disabled")
@@ -502,6 +540,9 @@ class DemoApp(ctk.CTk):
             return None
 
     def _run_phase(self, idx, _chain=None):
+        if idx in VIEW_ONLY:
+            self._select_phase(idx)
+            return
         if self.running_idx is not None:
             return
         if idx != "1" and not self.done["1"]:
@@ -631,6 +672,7 @@ class DemoApp(ctk.CTk):
             return
         {"1": lambda: self._render_generation("copula"),
          "2": lambda: self._render_generation("ctgan"),
+         "V": self._render_validation,
          "3": self._render_datasets,
          "4": self._render_analysis,
          "5": lambda: self._render_figures(["histograms", "boxplots",
@@ -783,6 +825,108 @@ class DemoApp(ctk.CTk):
 
         loading.destroy()
         self._table(self._ds_table_holder, df, max_rows=None, padded=True)
+
+    def _render_validation(self):
+        methods = []
+        for key, name in (("copula", "Méthode 1 — Copule gaussienne"),
+                          ("ctgan", "Méthode 2 — CTGAN")):
+            if self._gen_stats(key):
+                methods.append((key, name))
+
+        wrap = ctk.CTkFrame(self.output, fg_color="transparent")
+        wrap.grid(row=0, column=0, sticky="nsew")
+        wrap.grid_rowconfigure(1, weight=1)
+        wrap.grid_columnconfigure(0, weight=1)
+
+        if not methods:
+            ctk.CTkLabel(
+                wrap, text="Aucune statistique de validation disponible.\n"
+                "Exécutez d'abord l'étape 1 (génération copule).",
+                font=(FONT_FAMILY, 13), text_color=COL_TXT_DIM,
+                justify="center").grid(row=0, column=0, pady=30)
+            return
+
+        self._val_map = {name: key for key, name in methods}
+        sel = ctk.CTkFrame(wrap, fg_color="transparent")
+        sel.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ctk.CTkLabel(sel, text="Méthode :", font=(FONT_FAMILY, 13),
+                     text_color=COL_TXT).pack(side="left", padx=(0, 8))
+        keys = list(self._val_map.keys())
+        self._val_menu = ctk.CTkOptionMenu(
+            sel, values=keys, command=self._show_validation, width=300,
+            fg_color=COL_CARD, button_color=COL_ACCENT_2,
+            button_hover_color="#4338ca", text_color=COL_TXT)
+        self._val_menu.pack(side="left")
+
+        self._val_holder = ctk.CTkScrollableFrame(wrap, fg_color="transparent")
+        self._val_holder.grid(row=1, column=0, sticky="nsew")
+        self._val_holder.grid_columnconfigure(0, weight=1)
+        self._show_validation(keys[0])
+
+    def _show_validation(self, label):
+        for w in self._val_holder.winfo_children():
+            w.destroy()
+        stats = self._gen_stats(self._val_map.get(label))
+        if not stats:
+            ctk.CTkLabel(self._val_holder, text="Aucune donnée.",
+                         text_color=COL_TXT_DIM).grid(row=0, column=0, pady=20)
+            return
+
+        acc = stats.get("total_accepted", 0)
+        att = stats.get("total_attempts", 0)
+        rej = stats.get("total_rejected", 0)
+        rate = stats.get("global_rejection_rate", 0.0)
+        avg = stats.get("average_attempts_per_accepted")
+
+        self._cards_row(self._val_holder, [
+            ("Patients acceptés", f"{acc:,}".replace(",", " "), COL_OK),
+            ("Tentatives totales", f"{att:,}".replace(",", " "), COL_ACCENT_2),
+            ("Échantillons rejetés", f"{rej:,}".replace(",", " "), COL_RUN),
+            ("Taux de rejet global", f"{rate:.1%}", COL_ERR),
+        ], 0)
+
+        r = 1
+        if isinstance(avg, (int, float)):
+            card = self._panel(self._val_holder,
+                               "Efficacité de la génération", r); r += 1
+            self._kv(card, "Tentatives moyennes par patient accepté",
+                     f"{avg:.2f}")
+            ctk.CTkLabel(
+                card, text="Chaque patient est ré-échantillonné jusqu'à "
+                "passer toute la cascade de validation.",
+                font=(FONT_FAMILY, 11), text_color=COL_TXT_DIM,
+                anchor="w", justify="left").pack(anchor="w", padx=16, pady=(2, 12))
+
+        per_rule = stats.get("rejections_per_rule", {})
+        if per_rule:
+            card = self._panel(self._val_holder,
+                               "Rejets par règle de validation", r); r += 1
+            total = sum(per_rule.values()) or 1
+            for rule, cnt in sorted(per_rule.items(), key=lambda kv: -kv[1]):
+                self._rule_row(card, RULE_FR.get(rule, rule), cnt, cnt / total)
+            ctk.CTkFrame(card, height=6, fg_color="transparent").pack()
+
+        by_class = stats.get("rejection_rate_by_class", {})
+        if by_class:
+            card = self._panel(self._val_holder,
+                               "Taux de rejet par classe", r); r += 1
+            for cls, rt in by_class.items():
+                self._rate_row(card, CLASS_FR.get(cls, cls), rt)
+            ctk.CTkFrame(card, height=6, fg_color="transparent").pack()
+
+    def _rule_row(self, parent, name, count, frac):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=3)
+        row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(row, text=name, width=230, anchor="w",
+                     font=(FONT_FAMILY, 12), text_color=COL_TXT).grid(
+            row=0, column=0, sticky="w")
+        bar = ctk.CTkProgressBar(row, height=12, progress_color=COL_ACCENT_2)
+        bar.set(min(frac, 1.0))
+        bar.grid(row=0, column=1, sticky="ew", padx=10)
+        ctk.CTkLabel(row, text=f"{count:,}".replace(",", " "), width=70,
+                     anchor="e", font=(FONT_FAMILY, 12, "bold"),
+                     text_color=COL_TXT).grid(row=0, column=2, sticky="e")
 
     def _render_analysis(self):
         ana = self._read_json("analysis_report.json")
