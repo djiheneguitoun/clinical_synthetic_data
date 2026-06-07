@@ -148,12 +148,13 @@ def build_ml_evaluation_report(
     df: pd.DataFrame,
     df_other: Optional[pd.DataFrame] = None,
     seed: int = 42,
-    progress: Optional[Callable[[float], None]] = None,
+    progress: Optional[Callable[[dict], None]] = None,
 ) -> dict:
     """Rapport ML complet, sérialisable JSON.
 
-    `progress`, si fourni, est appelé avec une fraction d'avancement (0→1)
-    avant l'entraînement de chaque modèle ; chaque étape est aussi journalisée.
+    `progress`, si fourni, est appelé avant l'entraînement de chaque modèle
+    avec un dict {frac, done, total, stage, model} ; chaque étape est aussi
+    journalisée.
     """
     n_models = len(MODEL_FACTORIES)
     total = n_models * (2 + (2 if df_other is not None else 0))
@@ -161,12 +162,15 @@ def build_ml_evaluation_report(
 
     def hook(stage: str, name: str) -> None:
         done["n"] += 1
-        _LOG.info(
-            f"{_STAGE_LABELS.get(stage, stage)} — "
-            f"{_MODEL_LABELS.get(name, name)}… ({done['n']}/{total})"
-        )
+        stage_fr = _STAGE_LABELS.get(stage, stage)
+        model_fr = _MODEL_LABELS.get(name, name)
+        _LOG.info(f"{stage_fr} — {model_fr}… ({done['n']}/{total})")
         if progress is not None:
-            progress(min(done["n"] / total, 1.0))
+            progress({
+                "frac": min(done["n"] / total, 1.0),
+                "done": done["n"], "total": total,
+                "stage": stage_fr, "model": model_fr,
+            })
 
     report: dict = {
         "n_total": int(len(df)),

@@ -17,7 +17,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageTk
     _HAS_PIL = True
 except Exception:  # pragma: no cover
     _HAS_PIL = False
@@ -76,6 +76,28 @@ RULE_FR = {
     "class_coherence": "Cohérence de classe diagnostique",
 }
 
+VAR_FR = {
+    "age": "Âge (ans)", "height": "Taille (cm)", "weight": "Poids (kg)",
+    "bmi": "IMC (kg/m²)", "heart_rate": "Fréq. cardiaque (bpm)",
+    "sbp": "PAS (mmHg)", "dbp": "PAD (mmHg)", "resp_rate": "Fréq. resp. (/min)",
+    "temp": "Température (°C)", "fasting_glucose": "Glycémie à jeun (mg/dL)",
+    "hba1c": "HbA1c (%)", "total_chol": "Cholestérol total (mg/dL)",
+    "ldl": "LDL (mg/dL)", "hdl": "HDL (mg/dL)", "triglycerides": "Triglycérides (mg/dL)",
+}
+
+CATVAR_FR = {
+    "sex": "Sexe", "physical_activity": "Activité physique",
+    "smoking": "Tabac", "alcohol": "Alcool", "diet_quality": "Qualité du régime",
+}
+
+MODALITY_FR = {
+    "Female": "Femme", "Male": "Homme",
+    "High": "Élevée", "Moderate": "Modérée", "Sedentary": "Sédentaire",
+    "Current": "Fumeur actuel", "Former": "Ancien fumeur", "Never": "Jamais fumé",
+    "Excessive": "Excessif", "None": "Aucun",
+    "Average": "Moyenne", "Good": "Bonne", "Poor": "Mauvaise",
+}
+
 FIG_FR = {
     "histograms_copula": "Histogrammes — Copule",
     "histograms_ctgan": "Histogrammes — CTGAN",
@@ -91,8 +113,39 @@ FIG_FR = {
 }
 
 
+def _disable_console_quickedit():
+    """Désactive le mode QuickEdit (Windows) : un clic/une sélection dans la
+    console mettait en pause l'écriture stdout, ce qui gelait l'entraînement
+    jusqu'à ce qu'on appuie sur Entrée."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        STD_INPUT_HANDLE = -10
+        ENABLE_QUICK_EDIT_MODE = 0x0040
+        ENABLE_EXTENDED_FLAGS = 0x0080
+
+        handle = kernel32.GetStdHandle(STD_INPUT_HANDLE)
+        mode = wintypes.DWORD()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return
+        new_mode = (mode.value & ~ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS
+        kernel32.SetConsoleMode(handle, new_mode)
+    except Exception:
+        pass
+
+
 class _StreamTee:
     _PCT = re.compile(r"(\d{1,3})%\|")
+    _EPOCH = re.compile(r"(\d+)\s*/\s*(\d+)")
+    _GEN = re.compile(r"Gen(?:erator)?\.?\s*\(?\s*(-?\d+(?:\.\d+)?)", re.I)
+    _DISC = re.compile(r"Discrim(?:inator)?\.?\s*\(?\s*(-?\d+(?:\.\d+)?)", re.I)
+    _ETA = re.compile(r"\[(\d+:\d+)<(\d+:\d+),\s*([\d.]+\s*(?:it/s|s/it))\]")
+    _EPOCH_LINE = re.compile(
+        r"Epoch\s+(\d+).*?Loss G:\s*(-?[\d.]+).*?Loss D:\s*(-?[\d.]+)", re.I)
 
     def __init__(self, q, original):
         self.q = q
@@ -110,9 +163,32 @@ class _StreamTee:
             if idx == -1:
                 break
             line, self._buf = self._buf[:idx], self._buf[idx + 1:]
-            m = self._PCT.search(line)
-            if m:
-                self.q.put(("progress", min(int(m.group(1)) / 100.0, 1.0)))
+            self._emit(line)
+
+    def _emit(self, line):
+        m = self._PCT.search(line)
+        if m:
+            self.q.put(("progress", min(int(m.group(1)) / 100.0, 1.0)))
+
+        info = {}
+        me = self._EPOCH.search(line)
+        if me:
+            info["epoch"], info["total"] = int(me.group(1)), int(me.group(2))
+        mg = self._GEN.search(line)
+        if mg:
+            info["gen"] = mg.group(1)
+        md = self._DISC.search(line)
+        if md:
+            info["disc"] = md.group(1)
+        mt = self._ETA.search(line)
+        if mt:
+            info["eta"], info["rate"] = mt.group(2), mt.group(3)
+        ml = self._EPOCH_LINE.search(line)
+        if ml:
+            info["epoch"] = int(ml.group(1))
+            info["gen"], info["disc"] = ml.group(2), ml.group(3)
+        if info:
+            self.q.put(("ctgan", info))
 
     def flush(self):
         try:
@@ -176,7 +252,11 @@ def phase_worker(app, idx, params, q):
             if pipe is None or pipe.df_copula is None:
                 raise RuntimeError(
                     "L'étape 1 (génération copule) doit être exécutée d'abord.")
-            _phase_step_methods(pipe)[idx]()
+            if idx == "6":
+                pipe._step_run_ml_evaluation(
+                    progress=lambda info: q.put(("ml", info)))
+            else:
+                _phase_step_methods(pipe)[idx]()
             if idx in ("3", "5", "6"):
                 try:
                     pipe._step_save_summary()
@@ -188,6 +268,109 @@ def phase_worker(app, idx, params, q):
         q.put(("phase_error", (idx, traceback.format_exc())))
     finally:
         sys.stdout, sys.stderr = orig_out, orig_err
+
+
+class _ImageViewer(ctk.CTkToplevel):
+    """Fenêtre d'image avec zoom (molette/boutons) et déplacement (glisser)."""
+
+    def __init__(self, master, path, title):
+        super().__init__(master)
+        self.title(title)
+        self.geometry("1024x780")
+        self.configure(fg_color=COL_BG)
+        self._path = path
+        self._img = Image.open(path)
+        self._scale = 1.0
+        self._fit_scale = 1.0
+        self._min_scale = 0.05
+        self._max_scale = 12.0
+        self._photo = None
+
+        bar = ctk.CTkFrame(self, fg_color=COL_PANEL, corner_radius=0)
+        bar.pack(fill="x")
+
+        def tb(txt, cmd, w=64, **kw):
+            b = ctk.CTkButton(bar, text=txt, width=w, height=32, corner_radius=8,
+                              font=(FONT_FAMILY, 13, "bold"), command=cmd, **kw)
+            return b
+
+        tb("➖", lambda: self._zoom(1 / 1.25)).pack(side="left", padx=(10, 4), pady=8)
+        tb("➕", lambda: self._zoom(1.25)).pack(side="left", padx=4, pady=8)
+        tb("Ajuster", self._fit, w=84, fg_color=COL_ACCENT,
+           hover_color="#0b7d72").pack(side="left", padx=4)
+        tb("100 %", self._actual, w=70).pack(side="left", padx=4)
+        ctk.CTkLabel(
+            bar, text="Molette : zoom    •    glisser : déplacer    •    "
+            "double-clic : ajuster", font=(FONT_FAMILY, 11),
+            text_color=COL_TXT_DIM).pack(side="left", padx=14)
+        tb("🗂  Fichier", self._open_file, w=92, fg_color=COL_CARD,
+           text_color=COL_TXT, hover_color=COL_CARD_HOVER).pack(side="right", padx=10)
+
+        self._canvas = tk.Canvas(self, bg="#0f172a", highlightthickness=0)
+        self._canvas.pack(fill="both", expand=True)
+        self._img_id = self._canvas.create_image(0, 0, anchor="nw")
+
+        self._canvas.bind("<MouseWheel>", self._on_wheel)
+        self._canvas.bind("<Button-4>", lambda e: self._zoom(1.25))
+        self._canvas.bind("<Button-5>", lambda e: self._zoom(1 / 1.25))
+        self._canvas.bind("<ButtonPress-1>",
+                          lambda e: self._canvas.scan_mark(e.x, e.y))
+        self._canvas.bind("<B1-Motion>",
+                          lambda e: self._canvas.scan_dragto(e.x, e.y, gain=1))
+        self._canvas.bind("<Double-Button-1>", lambda e: self._fit())
+        self.after(120, self._fit)
+
+    def _resample(self):
+        return getattr(getattr(Image, "Resampling", Image), "LANCZOS",
+                       getattr(Image, "LANCZOS", 1))
+
+    def _redraw(self):
+        w = max(int(self._img.width * self._scale), 1)
+        h = max(int(self._img.height * self._scale), 1)
+        self._photo = ImageTk.PhotoImage(self._img.resize((w, h), self._resample()))
+        cw = max(self._canvas.winfo_width(), 1)
+        ch = max(self._canvas.winfo_height(), 1)
+        ox = max((cw - w) // 2, 0)
+        oy = max((ch - h) // 2, 0)
+        self._canvas.itemconfigure(self._img_id, image=self._photo)
+        self._canvas.coords(self._img_id, ox, oy)
+        self._canvas.configure(scrollregion=(0, 0, max(w, cw), max(h, ch)))
+
+    def _zoom(self, factor):
+        xv, yv = self._canvas.xview(), self._canvas.yview()
+        cx, cy = (xv[0] + xv[1]) / 2, (yv[0] + yv[1]) / 2
+        self._scale = min(max(self._scale * factor, self._min_scale),
+                          self._max_scale)
+        self._redraw()
+        xv, yv = self._canvas.xview(), self._canvas.yview()
+        self._canvas.xview_moveto(max(0.0, cx - (xv[1] - xv[0]) / 2))
+        self._canvas.yview_moveto(max(0.0, cy - (yv[1] - yv[0]) / 2))
+
+    def _on_wheel(self, e):
+        self._zoom(1.25 if e.delta > 0 else 1 / 1.25)
+
+    def _fit(self):
+        cw, ch = self._canvas.winfo_width(), self._canvas.winfo_height()
+        if cw < 10 or ch < 10:
+            self.after(80, self._fit)
+            return
+        self._fit_scale = min(cw / self._img.width, ch / self._img.height)
+        self._min_scale = self._fit_scale * 0.5
+        self._max_scale = self._fit_scale * 16
+        self._scale = self._fit_scale
+        self._redraw()
+        self._canvas.xview_moveto(0.0)
+        self._canvas.yview_moveto(0.0)
+
+    def _actual(self):
+        self._scale = min(max(1.0, self._min_scale), self._max_scale)
+        self._redraw()
+
+    def _open_file(self):
+        try:
+            os.startfile(Path(self._path).absolute())  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
 
 class PhaseItem(ctk.CTkFrame):
@@ -276,6 +459,16 @@ class DemoApp(ctk.CTk):
         self._fig_ref = None
         self._cur_fig: Path | None = None
         self._summary_cache: dict | None = None
+        self._run_params: dict | None = None
+        self._run_prog = None
+        self._run_pct = None
+        self._run_status = None
+        self._run_epoch_lbl = None
+        self._run_loss_lbl = None
+        self._run_eta_lbl = None
+        self._run_ml_stage = None
+        self._run_ml_model = None
+        self._run_ml_count = None
 
         self._setup_ttk_style()
         self._build_layout()
@@ -461,10 +654,6 @@ class DemoApp(ctk.CTk):
                                     text_color=COL_RUN)
         self.h_timer.grid(row=0, column=3, rowspan=2, padx=(0, 16))
 
-        self.prog = ctk.CTkProgressBar(wrap, progress_color=COL_ACCENT_2,
-                                       height=6)
-        self.prog.set(0)
-
         self.output = ctk.CTkFrame(wrap, fg_color="transparent")
         self.output.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
         self.output.grid_rowconfigure(0, weight=1)
@@ -553,14 +742,12 @@ class DemoApp(ctk.CTk):
         params = self._gather_params()
         if params is None:
             return
+        self._run_params = params
         self.output_dir = Path(params["output_dir"])
-        self._select_phase(idx)
         self.running_idx = idx
         self.items[idx].set_state("running")
         self.start_time = time.time()
-        self.prog.set(0)
-        if idx == "2":
-            self.prog.grid(row=0, column=0, sticky="ew", padx=24, pady=(0, 2))
+        self._select_phase(idx)
         self._refresh_enabled()
         self._update_header_status()
         self._tick()
@@ -589,8 +776,22 @@ class DemoApp(ctk.CTk):
                 if kind == "status":
                     if self.running_idx == self.selected:
                         self.h_status.configure(text="⏳  " + str(payload)[:90])
+                    if self._run_status is not None and self._run_status.winfo_exists():
+                        self._run_status.configure(text=str(payload)[:120])
                 elif kind == "progress":
-                    self.prog.set(payload)
+                    if self._run_prog is not None and self._run_prog.winfo_exists():
+                        self._run_prog.set(payload)
+                    if self._run_pct is not None and self._run_pct.winfo_exists():
+                        self._run_pct.configure(text=f"{int(payload * 100)} %")
+                elif kind == "ctgan":
+                    self._update_ctgan_info(payload)
+                elif kind == "ml":
+                    frac = payload.get("frac", 0.0)
+                    if self._run_prog is not None and self._run_prog.winfo_exists():
+                        self._run_prog.set(frac)
+                    if self._run_pct is not None and self._run_pct.winfo_exists():
+                        self._run_pct.configure(text=f"{int(frac * 100)} %")
+                    self._update_ml_info(payload)
                 elif kind == "phase_result":
                     self._on_phase_done(payload)
                 elif kind == "phase_error":
@@ -603,7 +804,6 @@ class DemoApp(ctk.CTk):
         self.done[idx] = True
         self.items[idx].set_state("done")
         self.running_idx = None
-        self.prog.grid_forget()
         self._summary_cache = None
         chain = getattr(self, "_chain", None)
         self._chain = None
@@ -616,7 +816,6 @@ class DemoApp(ctk.CTk):
         self.items[idx].set_state("error")
         self.running_idx = None
         self._chain = None
-        self.prog.grid_forget()
         self._refresh_enabled()
         self._select_phase(idx)
         self._render_error(tb)
@@ -659,6 +858,15 @@ class DemoApp(ctk.CTk):
             return None
 
     def _clear_output(self):
+        self._run_prog = None
+        self._run_pct = None
+        self._run_status = None
+        self._run_epoch_lbl = None
+        self._run_loss_lbl = None
+        self._run_eta_lbl = None
+        self._run_ml_stage = None
+        self._run_ml_model = None
+        self._run_ml_count = None
         for w in self.output.winfo_children():
             w.destroy()
 
@@ -696,16 +904,149 @@ class DemoApp(ctk.CTk):
                      text_color=COL_TXT_DIM, justify="center").pack(pady=8)
 
     def _render_running(self, idx):
-        f = ctk.CTkFrame(self.output, fg_color="transparent")
+        _, title, _, accent = self._phase_meta(idx)
+        card = ctk.CTkFrame(self.output, fg_color=COL_PANEL, corner_radius=14,
+                            border_width=1, border_color=COL_BORDER)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_rowconfigure(0, weight=1)
+        card.grid_columnconfigure(0, weight=1)
+
+        f = ctk.CTkFrame(card, fg_color="transparent", width=480)
         f.grid(row=0, column=0)
-        ctk.CTkLabel(f, text="⏳", font=(FONT_FAMILY, 52),
-                     text_color=COL_RUN).pack(pady=(0, 10))
-        ctk.CTkLabel(f, text="Exécution en cours…",
-                     font=(FONT_FAMILY, 18, "bold"), text_color=COL_TXT).pack()
-        note = ("L'entraînement CTGAN peut durer plusieurs minutes."
-                if idx == "2" else "Veuillez patienter.")
+        f.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(f, text="⏳", font=(FONT_FAMILY, 48),
+                     text_color=accent).grid(row=0, column=0, pady=(0, 6))
+        ctk.CTkLabel(f, text=f"{title} — en cours…",
+                     font=(FONT_FAMILY, 19, "bold"),
+                     text_color=COL_TXT).grid(row=1, column=0)
+
+        p = self._run_params or {}
+
+        m = p.get("m_per_class")
+        if idx == "2":
+            rows = [
+                ("Epochs d'entraînement", p.get("ctgan_epochs", "—")),
+                ("Taille de batch", p.get("ctgan_batch_size", "—")),
+                ("Patients par classe", m if m is not None else "—"),
+                ("Total à générer", 6 * m if isinstance(m, int) else "—"),
+                ("Graine (seed)", p.get("seed", "—")),
+            ]
+        elif idx == "6":
+            rows = [
+                ("Protocole", "Split 80/20 + CV 5-fold"),
+                ("Modèles", "Rég. logistique • Forêt • MLP"),
+                ("Patients évalués", 6 * m if isinstance(m, int) else "—"),
+                ("Graine (seed)", p.get("seed", "—")),
+            ]
+        else:
+            rows = []
+
+        if rows:
+            info = ctk.CTkFrame(f, fg_color=COL_CARD, corner_radius=10, width=440)
+            info.grid(row=2, column=0, sticky="ew", pady=(16, 12))
+            info.grid_columnconfigure(0, weight=1)
+            for i, (k, v) in enumerate(rows):
+                ctk.CTkLabel(info, text=k, font=(FONT_FAMILY, 12),
+                             text_color=COL_TXT_DIM, anchor="w").grid(
+                    row=i, column=0, sticky="w", padx=16, pady=5)
+                ctk.CTkLabel(info, text=str(v), font=(FONT_FAMILY, 12, "bold"),
+                             text_color=COL_TXT, anchor="e").grid(
+                    row=i, column=1, sticky="e", padx=16, pady=5)
+
+        if idx in ("2", "6"):
+            barf = ctk.CTkFrame(f, fg_color="transparent", width=440)
+            barf.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+            barf.grid_columnconfigure(0, weight=1)
+            self._run_prog = ctk.CTkProgressBar(barf, progress_color=accent,
+                                                height=16, width=380)
+            self._run_prog.set(0)
+            self._run_prog.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+            self._run_pct = ctk.CTkLabel(barf, text="0 %", width=48,
+                                         font=(FONT_FAMILY, 13, "bold"),
+                                         text_color=accent)
+            self._run_pct.grid(row=0, column=1)
+
+        if idx == "2":
+            live = ctk.CTkFrame(f, fg_color=COL_CARD, corner_radius=10, width=440)
+            live.grid(row=4, column=0, sticky="ew", pady=(0, 12))
+            live.grid_columnconfigure((0, 1), weight=1)
+            self._run_epoch_lbl = ctk.CTkLabel(
+                live, text="Epoch  — / —", font=(FONT_FAMILY, 13, "bold"),
+                text_color=COL_TXT)
+            self._run_epoch_lbl.grid(row=0, column=0, columnspan=2,
+                                     sticky="ew", pady=(10, 2))
+            self._run_loss_lbl = ctk.CTkLabel(
+                live, text="Pertes  —", font=(FONT_FAMILY, 11),
+                text_color=COL_TXT_DIM)
+            self._run_loss_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+            self._run_eta_lbl = ctk.CTkLabel(
+                live, text="", font=(FONT_FAMILY, 11), text_color=COL_TXT_DIM)
+            self._run_eta_lbl.grid(row=1, column=1, sticky="ew", pady=(0, 10))
+
+        if idx == "6":
+            live = ctk.CTkFrame(f, fg_color=COL_CARD, corner_radius=10, width=440)
+            live.grid(row=4, column=0, sticky="ew", pady=(0, 12))
+            live.grid_columnconfigure(0, weight=1)
+            self._run_ml_stage = ctk.CTkLabel(
+                live, text="Préparation…", font=(FONT_FAMILY, 11),
+                text_color=COL_TXT_DIM)
+            self._run_ml_stage.grid(row=0, column=0, sticky="ew", pady=(10, 0))
+            self._run_ml_model = ctk.CTkLabel(
+                live, text="🔄  En attente…", font=(FONT_FAMILY, 16, "bold"),
+                text_color=accent)
+            self._run_ml_model.grid(row=1, column=0, sticky="ew", pady=(0, 2))
+            self._run_ml_count = ctk.CTkLabel(
+                live, text="", font=(FONT_FAMILY, 11), text_color=COL_TXT_DIM)
+            self._run_ml_count.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+
+        note = ("Entraînement du réseau génératif puis génération validée — "
+                "cela peut durer plusieurs minutes." if idx == "2"
+                else "Entraînement et validation croisée des 3 modèles — "
+                "le MLP peut prendre un moment." if idx == "6"
+                else "Veuillez patienter, l'étape est en cours d'exécution.")
         ctk.CTkLabel(f, text=note, font=(FONT_FAMILY, 12),
-                     text_color=COL_TXT_DIM).pack(pady=6)
+                     text_color=COL_TXT_DIM, wraplength=440,
+                     justify="center").grid(row=5, column=0, pady=(2, 8))
+
+        self._run_status = ctk.CTkLabel(f, text="Initialisation…",
+                                        font=(FONT_FAMILY, 12), text_color=accent,
+                                        wraplength=440, justify="center")
+        self._run_status.grid(row=6, column=0, pady=(0, 4))
+
+    def _update_ctgan_info(self, info):
+        el = self._run_epoch_lbl
+        if el is not None and el.winfo_exists() and "epoch" in info:
+            tot = info.get("total")
+            el.configure(text=f"Epoch  {info['epoch']} / {tot}" if tot
+                         else f"Epoch  {info['epoch']}")
+        ll = self._run_loss_lbl
+        if (ll is not None and ll.winfo_exists()
+                and ("gen" in info or "disc" in info)):
+            g, d = info.get("gen", "—"), info.get("disc", "—")
+            ll.configure(text=f"Pertes  •  Générateur {g}  •  Discriminateur {d}")
+        et = self._run_eta_lbl
+        if et is not None and et.winfo_exists():
+            parts = []
+            if info.get("eta"):
+                parts.append(f"reste ~{info['eta']}")
+            if info.get("rate"):
+                parts.append(str(info["rate"]))
+            if parts:
+                et.configure(text="  •  ".join(parts))
+
+    def _update_ml_info(self, info):
+        st = self._run_ml_stage
+        if st is not None and st.winfo_exists() and info.get("stage"):
+            st.configure(text=info["stage"])
+        md = self._run_ml_model
+        if md is not None and md.winfo_exists() and info.get("model"):
+            md.configure(text=f"🔄  {info['model']}")
+        ct = self._run_ml_count
+        if ct is not None and ct.winfo_exists():
+            d, t = info.get("done"), info.get("total")
+            if d and t:
+                ct.configure(text=f"Modèle {d} / {t}")
 
     def _render_error(self, tb):
         self._clear_output()
@@ -930,38 +1271,208 @@ class DemoApp(ctk.CTk):
 
     def _render_analysis(self):
         ana = self._read_json("analysis_report.json")
-        scroll = ctk.CTkScrollableFrame(self.output, fg_color="transparent")
-        scroll.grid(row=0, column=0, sticky="nsew")
-        scroll.grid_columnconfigure(0, weight=1)
+        wrap = ctk.CTkFrame(self.output, fg_color="transparent")
+        wrap.grid(row=0, column=0, sticky="nsew")
+        wrap.grid_rowconfigure(1, weight=1)
+        wrap.grid_columnconfigure(0, weight=1)
         if not ana:
-            ctk.CTkLabel(scroll, text="Aucun rapport. Exécutez l'étape 4.",
-                         text_color=COL_TXT_DIM).grid(row=0, column=0, pady=30)
+            ctk.CTkLabel(
+                wrap, text="Aucun rapport d'analyse.\nExécutez l'étape 4.",
+                font=(FONT_FAMILY, 13), text_color=COL_TXT_DIM,
+                justify="center").grid(row=0, column=0, pady=30)
             return
-        r = 0
-        for key, name in [("copula", "Méthode 1 — Copule gaussienne"),
-                          ("ctgan", "Méthode 2 — CTGAN")]:
-            block = ana.get(key)
-            if not isinstance(block, dict):
-                continue
-            card = self._panel(scroll, name, r); r += 1
-            gen = block.get("generation_stats", {})
-            rej = gen.get("global_rejection_rate")
-            if isinstance(rej, (int, float)):
-                self._kv(card, "Taux de rejet global", f"{rej:.1%}")
-            epi = block.get("epidemiological")
-            if isinstance(epi, dict):
-                for k, v in list(epi.items())[:8]:
-                    self._kv(card, str(k), str(v))
-            desc = block.get("descriptive")
-            if isinstance(desc, dict):
-                self._kv(card, "Variables décrites", str(len(desc)))
+
+        self._ana = ana
+        sections = []
+        if isinstance(ana.get("copula"), dict):
+            sections.append("Méthode 1 — Copule")
+        if isinstance(ana.get("ctgan"), dict):
+            sections.append("Méthode 2 — CTGAN")
         if isinstance(ana.get("method_comparison"), dict):
-            card = self._panel(scroll, "Comparaison Méthode 1 vs Méthode 2", r)
+            sections.append("Comparaison")
+
+        selrow = ctk.CTkFrame(wrap, fg_color="transparent")
+        selrow.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        self._ana_seg = ctk.CTkSegmentedButton(
+            selrow, values=sections, command=self._show_analysis,
+            fg_color=COL_CARD, selected_color=COL_ACCENT,
+            selected_hover_color="#0b7d72", unselected_color=COL_CARD,
+            unselected_hover_color=COL_CARD_HOVER, text_color=COL_TXT,
+            font=(FONT_FAMILY, 12, "bold"))
+        self._ana_seg.pack(side="left")
+
+        self._ana_holder = ctk.CTkScrollableFrame(wrap, fg_color="transparent")
+        self._ana_holder.grid(row=1, column=0, sticky="nsew")
+        self._ana_holder.grid_columnconfigure(0, weight=1)
+        if sections:
+            self._ana_seg.set(sections[0])
+            self._show_analysis(sections[0])
+
+    def _show_analysis(self, section):
+        for w in self._ana_holder.winfo_children():
+            w.destroy()
+        if section.startswith("Méthode 1"):
+            self._analysis_method(self._ana.get("copula", {}))
+        elif section.startswith("Méthode 2"):
+            self._analysis_method(self._ana.get("ctgan", {}))
+        else:
+            self._analysis_comparison(self._ana.get("method_comparison", {}))
+
+    def _analysis_method(self, block):
+        holder = self._ana_holder
+        desc = block.get("descriptive", {}) or {}
+        gen = block.get("generation_stats", {}) or {}
+        epi = block.get("epidemiological", {}) or {}
+
+        n_total = desc.get("n_total", 0)
+        n_classes = len(desc.get("n_by_class", {}) or {})
+        rate = gen.get("global_rejection_rate")
+        avg = gen.get("average_attempts_per_accepted")
+        self._cards_row(holder, [
+            ("Patients", f"{n_total:,}".replace(",", " "), COL_ACCENT),
+            ("Classes", str(n_classes), COL_OK),
+            ("Taux de rejet", f"{rate:.1%}" if isinstance(rate, (int, float))
+             else "—", COL_RUN),
+            ("Tentatives moy.", f"{avg:.2f}" if isinstance(avg, (int, float))
+             else "—", COL_ACCENT_2),
+        ], 0)
+        r = 1
+
+        if epi:
+            card = self._panel(holder, "Validation épidémiologique", r); r += 1
+            npass, ntot = epi.get("n_patterns_passed"), epi.get("n_patterns_total")
+            if isinstance(npass, int) and isinstance(ntot, int):
+                self._badge_line(card, "Motifs cliniques validés",
+                                 f"{npass} / {ntot}", npass == ntot)
+            ao = epi.get("age_ordering")
+            if isinstance(ao, list) and ao:
+                n_ok = sum(1 for x in ao if isinstance(x, dict) and x.get("passed"))
+                self._badge_line(card, "Ordres d'âge entre classes respectés",
+                                 f"{n_ok} / {len(ao)}",
+                                 bool(epi.get("age_ordering_all_passed",
+                                              n_ok == len(ao))))
+            pats = epi.get("patterns")
+            if isinstance(pats, list) and pats:
+                rows = []
+                for p in pats:
+                    if not isinstance(p, dict):
+                        continue
+                    thr = p.get("threshold")
+                    rule = p.get("rule")
+                    thr_txt = (f"≥ {thr}" if rule == "min_mean"
+                               else f"≤ {thr}" if rule == "max_mean" else f"{thr}")
+                    rows.append([
+                        CLASS_FR.get(p.get("class"), p.get("class")),
+                        VAR_FR.get(p.get("variable"), p.get("variable")),
+                        str(p.get("observed_mean")), thr_txt,
+                        "✓" if p.get("passed") else "✗",
+                    ])
+                self._grid_table(card, ["Classe", "Variable", "Observé",
+                                        "Seuil", "OK"], rows)
+            ctk.CTkFrame(card, height=4, fg_color="transparent").pack()
+
+        cont = desc.get("continuous_global")
+        if isinstance(cont, dict) and cont:
+            card = self._panel(
+                holder, "Statistiques descriptives — variables continues", r)
             r += 1
-            mc = ana["method_comparison"]
-            for k, v in list(mc.items())[:10]:
-                if isinstance(v, (int, float, str)):
-                    self._kv(card, str(k), str(v))
+            rows = []
+            for var, st in cont.items():
+                if not isinstance(st, dict):
+                    continue
+                rows.append([
+                    VAR_FR.get(var, var), str(st.get("mean", "—")),
+                    str(st.get("std", "—")), str(st.get("median", "—")),
+                    str(st.get("min", "—")), str(st.get("max", "—")),
+                ])
+            self._grid_table(card, ["Variable", "Moyenne", "Écart-type",
+                                    "Médiane", "Min", "Max"], rows)
+            ctk.CTkFrame(card, height=4, fg_color="transparent").pack()
+
+        cat = desc.get("categorical_global")
+        if isinstance(cat, dict) and cat:
+            card = self._panel(holder, "Variables catégorielles (proportions)", r)
+            r += 1
+            for var, mods in cat.items():
+                if not isinstance(mods, dict):
+                    continue
+                ctk.CTkLabel(card, text=CATVAR_FR.get(var, var), anchor="w",
+                             font=(FONT_FAMILY, 12, "bold"),
+                             text_color=COL_ACCENT_2).pack(
+                    fill="x", padx=16, pady=(10, 2))
+                for mod, prop in sorted(mods.items(), key=lambda kv: -kv[1]):
+                    self._rate_row(card, MODALITY_FR.get(mod, mod), prop)
+            ctk.CTkFrame(card, height=8, fg_color="transparent").pack()
+
+    def _analysis_comparison(self, mc):
+        holder = self._ana_holder
+        n_c, n_g = mc.get("n_copula"), mc.get("n_ctgan")
+        frob = mc.get("correlation_frobenius_distance")
+        self._cards_row(holder, [
+            ("Patients — Copule", f"{n_c:,}".replace(",", " ")
+             if isinstance(n_c, int) else "—", COL_ACCENT),
+            ("Patients — CTGAN", f"{n_g:,}".replace(",", " ")
+             if isinstance(n_g, int) else "—", COL_ACCENT_2),
+            ("Distance corrélations", f"{frob:.3f}"
+             if isinstance(frob, (int, float)) else "—", COL_RUN),
+        ], 0)
+        r = 1
+
+        div = mc.get("correlation_top_divergences")
+        if isinstance(div, list) and div:
+            card = self._panel(
+                holder, "Plus fortes divergences de corrélation "
+                "(Copule vs CTGAN)", r); r += 1
+            rows = []
+            for x in div:
+                if not isinstance(x, dict):
+                    continue
+                pair = (f"{VAR_FR.get(x.get('var1'), x.get('var1'))}  ×  "
+                        f"{VAR_FR.get(x.get('var2'), x.get('var2'))}")
+                rows.append([pair, str(x.get("corr_a")), str(x.get("corr_b")),
+                             str(x.get("delta"))])
+            self._grid_table(card, ["Paire de variables", "Copule", "CTGAN",
+                                    "Δ"], rows)
+            ctk.CTkLabel(
+                card, text="Δ = écart absolu entre les corrélations de Pearson "
+                "des deux méthodes.", font=(FONT_FAMILY, 10),
+                text_color=COL_TXT_DIM, anchor="w", justify="left").pack(
+                fill="x", padx=16, pady=(0, 12))
+
+        cm = mc.get("continuous_means")
+        if isinstance(cm, dict) and cm:
+            card = self._panel(
+                holder, "Moyennes par classe — Copule vs CTGAN", r); r += 1
+            self._cmp_means = cm
+            self._cmp_class_map = {CLASS_FR.get(c, c): c for c in cm}
+            selrow = ctk.CTkFrame(card, fg_color="transparent")
+            selrow.pack(fill="x", padx=16, pady=(2, 6))
+            ctk.CTkLabel(selrow, text="Classe :", font=(FONT_FAMILY, 12),
+                         text_color=COL_TXT).pack(side="left", padx=(0, 8))
+            pretty = list(self._cmp_class_map.keys())
+            ctk.CTkOptionMenu(
+                selrow, values=pretty, command=self._show_cmp_class, width=220,
+                fg_color=COL_CARD, button_color=COL_ACCENT_2,
+                button_hover_color="#4338ca", text_color=COL_TXT).pack(side="left")
+            self._cmp_table_holder = ctk.CTkFrame(card, fg_color="transparent")
+            self._cmp_table_holder.pack(fill="x")
+            self._show_cmp_class(pretty[0])
+            ctk.CTkFrame(card, height=4, fg_color="transparent").pack()
+
+    def _show_cmp_class(self, label):
+        for w in self._cmp_table_holder.winfo_children():
+            w.destroy()
+        data = self._cmp_means.get(self._cmp_class_map.get(label), {})
+        rows = []
+        for var, st in data.items():
+            if not isinstance(st, dict):
+                continue
+            a, b = st.get("mean_copula"), st.get("mean_ctgan")
+            delta = (f"{abs(a - b):.2f}" if isinstance(a, (int, float))
+                     and isinstance(b, (int, float)) else "—")
+            rows.append([VAR_FR.get(var, var), str(a), str(b), delta])
+        self._grid_table(self._cmp_table_holder,
+                         ["Variable", "Copule", "CTGAN", "Δ"], rows)
 
     def _render_figures(self, patterns):
         fd = self.output_dir / "figures"
@@ -989,11 +1500,23 @@ class DemoApp(ctk.CTk):
         disp.grid(row=0, column=1, sticky="nsew")
         disp.grid_rowconfigure(1, weight=1)
         disp.grid_columnconfigure(0, weight=1)
-        self._fig_title = ctk.CTkLabel(disp, text="", font=(FONT_FAMILY, 14, "bold"),
+
+        top = ctk.CTkFrame(disp, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 4))
+        top.grid_columnconfigure(0, weight=1)
+        self._fig_title = ctk.CTkLabel(top, text="", anchor="w",
+                                       font=(FONT_FAMILY, 14, "bold"),
                                        text_color=COL_TXT)
-        self._fig_title.grid(row=0, column=0, pady=(12, 4))
-        self._fig_lbl = ctk.CTkLabel(disp, text="")
+        self._fig_title.grid(row=0, column=0, sticky="w")
+        ctk.CTkButton(top, text="🔍  Agrandir / Zoom", width=160, height=32,
+                      corner_radius=8, font=(FONT_FAMILY, 12, "bold"),
+                      fg_color=COL_ACCENT_2, hover_color="#4338ca",
+                      text_color="#ffffff",
+                      command=self._open_viewer).grid(row=0, column=1, sticky="e")
+
+        self._fig_lbl = ctk.CTkLabel(disp, text="", cursor="hand2")
         self._fig_lbl.grid(row=1, column=0, sticky="nsew", padx=12, pady=12)
+        self._fig_lbl.bind("<Double-Button-1>", lambda e: self._open_viewer())
         self._fig_holder = disp
         disp.bind("<Configure>", lambda e: self._render_fig())
 
@@ -1029,6 +1552,11 @@ class DemoApp(ctk.CTk):
         cimg = ctk.CTkImage(light_image=img, dark_image=img, size=size)
         self._fig_lbl.configure(image=cimg, text="")
         self._fig_ref = cimg
+
+    def _open_viewer(self):
+        if self._cur_fig:
+            self._popup_fig(self._cur_fig,
+                            self._fig_title.cget("text") or Path(self._cur_fig).stem)
 
     def _render_ml(self):
         ml = self._read_json("ml_report.json")
@@ -1121,30 +1649,19 @@ class DemoApp(ctk.CTk):
 
     def _popup_fig(self, path, name):
         if not _HAS_PIL:
-            return
-        win = ctk.CTkToplevel(self)
-        win.title(name)
-        win.geometry("900x700")
-        win.configure(fg_color=COL_BG)
-        holder = ctk.CTkFrame(win, fg_color=COL_PANEL)
-        holder.pack(fill="both", expand=True, padx=10, pady=10)
-        lbl = ctk.CTkLabel(holder, text="")
-        lbl.pack(fill="both", expand=True, padx=8, pady=8)
-
-        def draw(_e=None):
             try:
-                img = Image.open(path)
+                os.startfile(Path(path).absolute())  # type: ignore[attr-defined]
             except Exception:
-                return
-            aw = max(win.winfo_width() - 60, 300)
-            ah = max(win.winfo_height() - 60, 300)
-            ratio = min(aw / img.width, ah / img.height)
-            size = (int(img.width * ratio), int(img.height * ratio))
-            ci = ctk.CTkImage(light_image=img, dark_image=img, size=size)
-            lbl.configure(image=ci, text="")
-            lbl._ref = ci
-        holder.bind("<Configure>", draw)
-        win.after(200, draw)
+                pass
+            return
+        try:
+            viewer = _ImageViewer(self, str(path), name)
+            viewer.after(150, viewer.focus)
+        except Exception:
+            try:
+                os.startfile(Path(path).absolute())  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
     def _cards_row(self, parent, cards, row):
         f = ctk.CTkFrame(parent, fg_color="transparent")
@@ -1177,6 +1694,37 @@ class DemoApp(ctk.CTk):
                      text_color=COL_TXT_DIM).pack(side="left")
         ctk.CTkLabel(row, text=value, anchor="e", font=(FONT_FAMILY, 12, "bold"),
                      text_color=COL_TXT).pack(side="right")
+
+    def _badge_line(self, parent, label, value, ok):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=4)
+        ctk.CTkLabel(row, text=label, anchor="w", font=(FONT_FAMILY, 12),
+                     text_color=COL_TXT_DIM).pack(side="left")
+        ctk.CTkLabel(row, text=("✓  " if ok else "✗  ") + value, anchor="e",
+                     font=(FONT_FAMILY, 12, "bold"),
+                     text_color=COL_OK if ok else COL_ERR).pack(side="right")
+
+    def _grid_table(self, parent, headers, rows):
+        t = ctk.CTkFrame(parent, fg_color=COL_BORDER, corner_radius=8)
+        t.pack(fill="x", padx=14, pady=(2, 10))
+        ncol = len(headers)
+        for j in range(ncol):
+            t.grid_columnconfigure(j, weight=3 if j == 0 else 1, uniform="col")
+        for j, h in enumerate(headers):
+            ctk.CTkLabel(t, text=h, font=(FONT_FAMILY, 11, "bold"),
+                         text_color="#ffffff", fg_color=COL_ACCENT,
+                         anchor="w" if j == 0 else "center").grid(
+                row=0, column=j, sticky="nsew", padx=(0, 1), pady=(0, 1),
+                ipady=5, ipadx=8)
+        for i, rrow in enumerate(rows, 1):
+            bg = COL_PANEL if i % 2 else COL_CARD
+            for j, val in enumerate(rrow):
+                ctk.CTkLabel(t, text=str(val), font=(FONT_FAMILY, 11),
+                             text_color=COL_TXT, fg_color=bg,
+                             anchor="w" if j == 0 else "center").grid(
+                    row=i, column=j, sticky="nsew", padx=(0, 1), pady=(0, 1),
+                    ipady=3, ipadx=8)
+        return t
 
     def _rate_row(self, parent, name, rate):
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -1286,6 +1834,7 @@ class DemoApp(ctk.CTk):
 
 
 def main():
+    _disable_console_quickedit()
     DemoApp().mainloop()
 
 
